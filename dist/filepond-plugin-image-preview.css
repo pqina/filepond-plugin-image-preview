@@ -1,0 +1,98 @@
+.filepond--image-preview-wrapper {
+  z-index: 2;
+}
+
+.filepond--panel-item {
+  z-index: 1;
+}
+
+.filepond--image-preview-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  margin: 0;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  pointer-events: none;
+}
+.filepond--image-preview-overlay > canvas {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  margin: 0;
+  opacity: 0;
+  transition: opacity 0.75s;
+}
+.filepond--image-preview-overlay > canvas:first-child {
+  opacity: 1;
+}
+
+[data-file-state='processing-complete']
+  .filepond--image-preview-overlay
+  > canvas:first-child {
+  opacity: 0.25;
+}
+
+[data-file-state='processing-complete']
+  .filepond--image-preview-overlay
+  > canvas:nth-child(3) {
+  opacity: 1;
+}
+
+[data-file-state*='invalid']
+  .filepond--image-preview-overlay
+  > canvas:first-child,
+[data-file-state*='error']
+  .filepond--image-preview-overlay
+  > canvas:first-child {
+  opacity: 0.25;
+}
+
+[data-file-state*='invalid']
+  .filepond--image-preview-overlay
+  > canvas:nth-child(2),
+[data-file-state*='error']
+  .filepond--image-preview-overlay
+  > canvas:nth-child(2) {
+  opacity: 1;
+}
+
+.filepond--image-preview-wrapper {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  margin: 0;
+  border-radius: 0.45em;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.01);
+  -webkit-transform: rotateZ(0.0001deg);
+  transform: rotateZ(0.0001deg);
+}
+
+.filepond--image-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  pointer-events: none;
+  -webkit-transform-origin: center center;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+.filepond--panel-item {
+  border-radius: 0.5em;
+  background-color: #64605e;
+}
+.filepond--panel-item .filepond--panel-bottom {
+  box-shadow: 0 0.125em 0.125em -0.125em rgba(0, 0, 0, 0.25);
+}
