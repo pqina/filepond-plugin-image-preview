@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.1
+ * FilePondPluginImagePreview 1.0.2
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -230,10 +230,34 @@
     return canvas;
   };
 
+  var drawCenteredImage = function drawCenteredImage(
+    ctx,
+    width,
+    height,
+    image,
+    scalar
+  ) {
+    ctx.drawImage(
+      image,
+      width * 0.5 - scalar * image.width * 0.5,
+      height * 0.5 - scalar * image.height * 0.5,
+      scalar * image.width,
+      scalar * image.height
+    );
+  };
+
+  var IMAGE_SCALE_SPRING_PROPS = {
+    type: 'spring',
+    stiffness: 0.5,
+    damping: 0.45,
+    mass: 10
+  };
+
   var createImagePresenterView = function createImagePresenterView(fpAPI) {
     return fpAPI.utils.createView({
       name: 'image-preview',
       tag: 'canvas',
+      ignoreRect: true,
       create: function create(_ref) {
         var root = _ref.root;
 
@@ -246,21 +270,70 @@
             props = _ref2.props,
             action = _ref2.action;
 
-          // set new root dimensions
-          root.element.width = action.width;
-          root.element.height = action.height;
+          // scale canvas based on pixel density
+          var pixelDensityFactor = window.devicePixelRatio;
 
-          // draw preview to root
+          // image ratio
+          var imageRatio = action.height / action.width;
+
+          // determine retina width and height
+          var containerWidth = root.rect.inner.width;
+          var containerMaxHeight = root.query('GET_MAX_PREVIEW_HEIGHT');
+
+          var targetWidth = containerWidth * pixelDensityFactor;
+          var targetHeight = Math.min(
+            containerMaxHeight * pixelDensityFactor,
+            imageRatio * containerWidth * pixelDensityFactor
+          );
+
+          // image was contained?
+          var contained = imageRatio * containerWidth > containerMaxHeight;
+
+          // set new root dimensions
+          root.element.width = targetWidth;
+          root.element.height = targetHeight;
+
+          // draw preview
+          var previewImage = createPreviewImage(
+            action.data,
+            action.width,
+            action.height,
+            action.orientation
+          );
+
+          // draw preview in root container
+          var scalarFront = targetHeight / previewImage.height;
           var ctx = root.element.getContext('2d');
-          ctx.drawImage(
-            createPreviewImage(
-              action.data,
+
+          // draw back fill image
+          if (contained) {
+            // scalar of the background image
+            var scalarBack = Math.max(
+              targetWidth / previewImage.width,
+              targetHeight / previewImage.height
+            );
+
+            // draw the background image
+            drawCenteredImage(
+              ctx,
               root.element.width,
               root.element.height,
-              action.orientation
-            ),
-            0,
-            0
+              previewImage,
+              scalarBack
+            );
+
+            // fade it out a bit by overlaying a dark grey smoke effect
+            ctx.fillStyle = 'rgba(20, 20, 20, .85)';
+            ctx.fillRect(0, 0, targetWidth, targetHeight);
+          }
+
+          // draw the actual image preview
+          drawCenteredImage(
+            ctx,
+            root.element.width,
+            root.element.height,
+            previewImage,
+            scalarFront
           );
 
           // let others know of our fabulous achievement, we'll delay it a bit so the back panel can finish stretching
@@ -272,32 +345,53 @@
       mixins: {
         styles: ['scaleX', 'scaleY', 'opacity'],
         animations: {
-          scaleX: {
-            type: 'spring',
-            stiffness: 0.5,
-            damping: 0.45,
-            mass: 10
-          },
-          scaleY: {
-            type: 'spring',
-            stiffness: 0.5,
-            damping: 0.45,
-            mass: 10
-          },
+          scaleX: IMAGE_SCALE_SPRING_PROPS,
+          scaleY: IMAGE_SCALE_SPRING_PROPS,
           opacity: { type: 'tween', duration: 750 }
         }
       }
     });
   };
 
+  var easeInOutSine = function easeInOutSine(t) {
+    return -0.5 * (Math.cos(Math.PI * t) - 1);
+  };
+
+  var addGradientSteps = function addGradientSteps(gradient, color) {
+    var alpha =
+      arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1;
+    var easeFn =
+      arguments.length > 3 && arguments[3] !== undefined
+        ? arguments[3]
+        : easeInOutSine;
+    var steps =
+      arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 10;
+    var offset =
+      arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 0;
+
+    var range = 1 - offset;
+    var rgb = color.join(',');
+    for (var i = 0; i <= steps; i++) {
+      var p = i / steps;
+      var stop = offset + range * p;
+      gradient.addColorStop(
+        stop,
+        'rgba(' + rgb + ', ' + easeFn(p) * alpha + ')'
+      );
+    }
+  };
+
   var overlayTemplate = document.createElement('canvas');
   var overlayTemplateError = document.createElement('canvas');
   var overlayTemplateSuccess = document.createElement('canvas');
 
-  var drawTemplate = function drawTemplate(canvas, colorFrom, colorTo) {
-    var width = 500;
-    var height = 200;
-
+  var drawTemplate = function drawTemplate(
+    canvas,
+    width,
+    height,
+    color,
+    alphaTarget
+  ) {
     canvas.width = width;
     canvas.height = height;
     var ctx = canvas.getContext('2d');
@@ -312,12 +406,12 @@
       height + 110,
       height + 100
     );
-    grad.addColorStop(0.5, 'rgba(' + colorFrom.join(',') + ')');
-    grad.addColorStop(1, 'rgba(' + colorTo.join(',') + ')');
+
+    addGradientSteps(grad, color, alphaTarget, undefined, 8, 0.4);
 
     ctx.save();
-    ctx.translate(-width * 0.25, 0);
-    ctx.scale(1.5, 1);
+    ctx.translate(-width * 0.5, 0);
+    ctx.scale(2, 1);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
@@ -333,31 +427,37 @@
     ctx.drawImage(source, 0, 0);
   };
 
-  drawTemplate(overlayTemplate, [40, 40, 40, 0], [40, 40, 40, 0.85]);
-  drawTemplate(overlayTemplateError, [196, 78, 71, 0], [196, 78, 71, 1]);
-  drawTemplate(overlayTemplateSuccess, [54, 151, 99, 0], [54, 151, 99, 1]);
+  var width = 500;
+  var height = 200;
+
+  drawTemplate(overlayTemplate, width, height, [40, 40, 40], 0.85);
+  drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
+  drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
 
   var createImageOverlayView = function createImageOverlayView(fpAPI) {
     return fpAPI.utils.createView({
       name: 'image-preview-overlay',
       tag: 'div',
+      ignoreRect: true,
       create: function create(_ref) {
         var root = _ref.root;
 
         // default shadow overlay
         root.ref.overlayShadow = document.createElement('canvas');
-        root.appendChild(root.ref.overlayShadow);
         applyTemplate(overlayTemplate, root.ref.overlayShadow);
 
         // error state overlay
         root.ref.overlayError = document.createElement('canvas');
-        root.appendChild(root.ref.overlayError);
         applyTemplate(overlayTemplateError, root.ref.overlayError);
 
         // success state overlay
         root.ref.overlaySuccess = document.createElement('canvas');
-        root.appendChild(root.ref.overlaySuccess);
         applyTemplate(overlayTemplateSuccess, root.ref.overlaySuccess);
+
+        // add to root
+        root.appendChild(root.ref.overlayShadow);
+        root.appendChild(root.ref.overlayError);
+        root.appendChild(root.ref.overlaySuccess);
       },
       mixins: {
         styles: ['opacity'],
@@ -421,32 +521,14 @@
     var toBitmap = function toBitmap(options, cb) {
       var file = options.file;
 
-      /*
-        const imageBitmapSettings = {
-            resizeWidth,
-            resizeHeight,
-            resizeQuality: 'medium'
-        }
-        */
-
-      // FileReader is required for Firefox, otherwise it throws an invalid state error on createImageBitmap
-
-      var reader = new FileReader();
-      reader.onload = function() {
-        var blob = new Blob([new Uint8Array(reader.result)], {
-          type: file.type
+      createImageBitmap(file)
+        .catch(function(error) {
+          // Firefox 57 will throw an InvalidStateError, this can be resolved by using a file reader and turning the file into a blob, but while Firefox then creates the bitmap it stall the main thread rendering the function useless. So for now, Firefox will call this method and will return null and then fallback to normal preview rendering using canvas
+          cb(null);
+        })
+        .then(function(imageBitmap) {
+          cb(imageBitmap);
         });
-
-        // we don't pass the imageBitmapSettings object, at the time of this writing it is still behind flags so it does nothing
-        createImageBitmap(blob)
-          .catch(function(error) {
-            cb(null);
-          })
-          .then(function(imageBitmap) {
-            cb(imageBitmap);
-          });
-      };
-      reader.readAsArrayBuffer(file);
     };
   };
 
@@ -529,72 +611,17 @@
   };
 
   var createImagePreviewView = function createImagePreviewView(fpAPI) {
-    var didCalculatePreviewSize = function didCalculatePreviewSize(_ref) {
+    var didCreatePreviewContainer = function didCreatePreviewContainer(_ref) {
       var root = _ref.root,
-        props = _ref.props,
-        action = _ref.action;
-
-      // calculate scale ratio
-      var scaleFactor = root.rect.element.width / action.width;
-
-      // scale panel
-      props.height = action.height * scaleFactor;
-    };
-
-    var didLoadPreview = function didLoadPreview(_ref2) {
-      var root = _ref2.root;
-      var overlay = root.ref.overlay;
-
-      // reveal overlay
-
-      overlay.opacity = 1;
-    };
-
-    var didDrawPreview = function didDrawPreview(_ref3) {
-      var root = _ref3.root;
-      var image = root.ref.image;
-
-      // reveal image
-
-      image.scaleX = 1.0;
-      image.scaleY = 1.0;
-      image.opacity = 1;
-    };
-
-    var create = function create(_ref4) {
-      var root = _ref4.root,
-        props = _ref4.props;
+        props = _ref.props;
       var utils = fpAPI.utils;
       var createView = utils.createView,
         createWorker = utils.createWorker,
         loadImage = utils.loadImage;
       var id = props.id;
 
-      // image view
-
-      var image = createImagePresenterView(fpAPI);
-
-      // append image presenter
-      root.ref.image = root.appendChildView(
-        root.createChildView(image, {
-          id: props.id,
-          scaleX: 1.25,
-          scaleY: 1.25,
-          opacity: 0
-        })
-      );
-
-      // image overlay
-      var overlay = createImageOverlayView(fpAPI);
-
-      // append image overlay
-      root.ref.overlay = root.appendChildView(
-        root.createChildView(overlay, {
-          opacity: 0
-        })
-      );
-
       // we need to get the file data to determine the eventual image size
+
       var item = root.query('GET_ITEM', id);
 
       // fallback
@@ -634,13 +661,20 @@
 
       // we need to check the rotation of the image
       getImageOrientation(item.file, function(orientation) {
+        // we use the bounds of the item, times the pixel ratio, and then multiply that once more to get a crips starter image
+        var boundsX = root.rect.element.width * window.devicePixelRatio * 2;
+        var boundsY = boundsX;
+
         // determine image size of this item
-        getImageScaledSize(item.fileURL, 700, 700, function(width, height) {
+        getImageScaledSize(item.fileURL, boundsX, boundsY, function(
+          width,
+          height
+        ) {
           // if is rotated incorrectly swap width and height
           if (orientation >= 5 && orientation <= 8) {
-            var _ref5 = [height, width];
-            width = _ref5[0];
-            height = _ref5[1];
+            var _ref2 = [height, width];
+            width = _ref2[0];
+            height = _ref2[1];
           }
 
           // let writer know
@@ -679,20 +713,60 @@
       });
     };
 
+    var didLoadPreview = function didLoadPreview(_ref3) {
+      var root = _ref3.root;
+
+      root.ref.overlay.opacity = 1;
+    };
+
+    var didDrawPreview = function didDrawPreview(_ref4) {
+      var root = _ref4.root;
+      var image = root.ref.image;
+
+      // reveal image
+
+      image.scaleX = 1.0;
+      image.scaleY = 1.0;
+      image.opacity = 1;
+    };
+
+    var create = function create(_ref5) {
+      var root = _ref5.root,
+        props = _ref5.props;
+      var image = createImagePresenterView(fpAPI);
+
+      // append image presenter
+      root.ref.image = root.appendChildView(
+        root.createChildView(image, {
+          id: props.id,
+          scaleX: 1.25,
+          scaleY: 1.25,
+          opacity: 0
+        })
+      );
+
+      // image overlay
+      var overlay = createImageOverlayView(fpAPI);
+
+      // append image overlay
+      root.ref.overlay = root.appendChildView(
+        root.createChildView(overlay, {
+          opacity: 0
+        })
+      );
+
+      // done creating the container, now wait for write so we can use the container element width for our image preview
+      root.dispatch('DID_CREATE_PREVIEW_CONTAINER');
+    };
+
     return fpAPI.utils.createView({
       name: 'image-preview-wrapper',
       create: create,
       write: fpAPI.utils.createRoute({
-        DID_CALCULATE_PREVIEW_IMAGE_SIZE: didCalculatePreviewSize,
         DID_LOAD_PREVIEW_IMAGE: didLoadPreview,
-        DID_DRAW_PREVIEW_IMAGE: didDrawPreview
-      }),
-      mixins: {
-        apis: ['height'],
-        animations: {
-          height: 'spring'
-        }
-      }
+        DID_DRAW_PREVIEW_IMAGE: didDrawPreview,
+        DID_CREATE_PREVIEW_CONTAINER: didCreatePreviewContainer
+      })
     });
   };
 
@@ -706,17 +780,6 @@
       createRoute = utils.createRoute;
 
     var imagePreview = createImagePreviewView(fpAPI);
-
-    // adds options to options register
-    addFilter('SET_DEFAULT_OPTIONS', function(options) {
-      return Object.assign(options, {
-        // Enable or disable image preview
-        allowImagePreview: [true, Type.BOOLEAN],
-
-        // Max size of preview file for when createImageBitmap is not supported
-        maxPreviewFileSize: [null, Type.INT]
-      });
-    });
 
     // called for each view that is created right after the 'create' method
     addFilter('CREATE_VIEW', function(viewAPI) {
@@ -753,6 +816,7 @@
         }
 
         // exit if image size is too high and no createImageBitmap support
+        // this would simply bring the browser to its knees and that is not what we want
         var supportsCreateImageBitmap = 'createImageBitmap' in (window || {});
         var maxPreviewFileSize = query('GET_MAX_PREVIEW_FILE_SIZE');
         if (
@@ -769,33 +833,55 @@
         root.ref.panel = view.appendChildView(view.createChildView(panel));
         root.ref.panel.element.classList.add('filepond--panel-item');
 
+        // set offset height so panel starts small and scales up when the image loads
+        root.ref.panel.height = 10;
+
         // set preview view
         root.ref.imagePreview = view.appendChildView(
-          view.createChildView(imagePreview, { id: id, height: 10 })
+          view.createChildView(imagePreview, { id: id })
         );
       };
 
-      var route = createRoute({
-        DID_LOAD_ITEM: didLoadItem
-      });
-
-      var writer = function writer(_ref2) {
+      var didCalculatePreviewSize = function didCalculatePreviewSize(_ref2) {
         var root = _ref2.root,
           props = _ref2.props,
-          actions = _ref2.actions;
+          action = _ref2.action;
 
-        route({ root: root, props: props, actions: actions });
+        // maximum height
+        var maxPreviewHeight = root.query('GET_MAX_PREVIEW_HEIGHT');
 
-        if (!root.ref.panel) {
-          return;
-        }
+        // calculate scale ratio
+        var scaleFactor = root.rect.element.width / action.width;
 
-        root.ref.panel.height = root.ref.imagePreview.height;
+        // set new panel height
+        root.ref.panel.height = Math.min(
+          maxPreviewHeight,
+          action.height * scaleFactor
+        );
       };
 
       // start writing
-      view.registerWriter(writer);
+      view.registerWriter(
+        createRoute({
+          DID_LOAD_ITEM: didLoadItem,
+          DID_CALCULATE_PREVIEW_IMAGE_SIZE: didCalculatePreviewSize
+        })
+      );
     });
+
+    // expose plugin
+    return {
+      options: {
+        // Max image height
+        maxPreviewHeight: [256, Type.INT],
+
+        // Enable or disable image preview
+        allowImagePreview: [true, Type.BOOLEAN],
+
+        // Max size of preview file for when createImageBitmap is not supported
+        maxPreviewFileSize: [null, Type.INT]
+      }
+    };
   };
 
   if (document) {

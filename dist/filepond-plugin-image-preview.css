@@ -11,10 +11,10 @@
   left: 0;
   top: 0;
   right: 0;
+  bottom: 0;
   z-index: 1;
   margin: 0;
-  -webkit-transform-style: preserve-3d;
-  transform-style: preserve-3d;
+  mix-blend-mode: multiply;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
@@ -35,18 +35,24 @@
   opacity: 1;
 }
 
+[data-file-state='processing-complete'] .filepond--image-preview-overlay {
+  mix-blend-mode: normal;
+}
 [data-file-state='processing-complete']
   .filepond--image-preview-overlay
   > canvas:first-child {
   opacity: 0.25;
 }
-
 [data-file-state='processing-complete']
   .filepond--image-preview-overlay
   > canvas:nth-child(3) {
   opacity: 1;
 }
 
+[data-file-state*='invalid'] .filepond--image-preview-overlay,
+[data-file-state*='error'] .filepond--image-preview-overlay {
+  mix-blend-mode: normal;
+}
 [data-file-state*='invalid']
   .filepond--image-preview-overlay
   > canvas:first-child,
@@ -55,7 +61,6 @@
   > canvas:first-child {
   opacity: 0.25;
 }
-
 [data-file-state*='invalid']
   .filepond--image-preview-overlay
   > canvas:nth-child(2),
