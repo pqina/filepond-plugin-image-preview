@@ -1,3 +1,8 @@
+/*
+ * FilePondPluginImagePreview 1.0.3
+ * Licensed under MIT, https://opensource.org/licenses/MIT
+ * Please visit https://pqina.nl/filepond for details.
+ */
 .filepond--image-preview-wrapper {
   z-index: 2;
 }
@@ -7,21 +12,6 @@
 }
 
 .filepond--image-preview-overlay {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
-  margin: 0;
-  mix-blend-mode: multiply;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-  pointer-events: none;
-}
-.filepond--image-preview-overlay > canvas {
   display: block;
   position: absolute;
   left: 0;
@@ -29,45 +19,27 @@
   width: 100%;
   margin: 0;
   opacity: 0;
-  transition: opacity 0.75s;
-}
-.filepond--image-preview-overlay > canvas:first-child {
-  opacity: 1;
-}
-
-[data-file-state='processing-complete'] .filepond--image-preview-overlay {
-  mix-blend-mode: normal;
-}
-[data-file-state='processing-complete']
-  .filepond--image-preview-overlay
-  > canvas:first-child {
-  opacity: 0.25;
-}
-[data-file-state='processing-complete']
-  .filepond--image-preview-overlay
-  > canvas:nth-child(3) {
-  opacity: 1;
+  z-index: 1;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
-[data-file-state*='invalid'] .filepond--image-preview-overlay,
-[data-file-state*='error'] .filepond--image-preview-overlay {
+.filepond--image-preview-overlay:nth-of-type(2) {
   mix-blend-mode: normal;
 }
-[data-file-state*='invalid']
-  .filepond--image-preview-overlay
-  > canvas:first-child,
-[data-file-state*='error']
-  .filepond--image-preview-overlay
-  > canvas:first-child {
-  opacity: 0.25;
+
+.filepond--image-preview-overlay:nth-of-type(3) {
+  mix-blend-mode: normal;
 }
-[data-file-state*='invalid']
-  .filepond--image-preview-overlay
-  > canvas:nth-child(2),
-[data-file-state*='error']
-  .filepond--image-preview-overlay
-  > canvas:nth-child(2) {
-  opacity: 1;
+
+@supports (-webkit-marquee-repetition: infinite) and (object-fit: fill) {
+  .filepond--image-preview-overlay {
+    mix-blend-mode: normal;
+  }
 }
 
 .filepond--image-preview-wrapper {
@@ -86,12 +58,32 @@
 
 .filepond--image-preview {
   position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
+  height: auto;
   pointer-events: none;
   -webkit-transform-origin: center center;
   transform-origin: center center;
+  background: #222;
   will-change: transform, opacity;
+  overflow: hidden;
+}
+.filepond--image-preview > canvas {
+  position: absolute;
+  opacity: 0.15;
+  z-index: 1;
+}
+.filepond--image-preview > div {
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  z-index: 2;
+  -webkit-transform: rotateZ(0.0001deg);
+  transform: rotateZ(0.0001deg);
+}
+.filepond--image-preview > div > canvas {
+  position: absolute;
 }
 
 .filepond--panel-item {

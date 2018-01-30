@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.2
+ * FilePondPluginImagePreview 1.0.3
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -29,7 +29,9 @@ const fixImageOrientation = (ctx, width, height, orientation) => {
 
 // draws the preview image
 const createPreviewImage = (data, width, height, orientation) => {
-  // width and height have already been swapped earlier if orientation was in range below, let's swap back to make this code a bit more readable
+  // width and height have already been swapped earlier
+  // if orientation was in range below, let's swap back to make
+  // this code a bit more readable
   if (orientation >= 5 && orientation <= 8) {
     [width, height] = [height, width];
   }
@@ -53,25 +55,16 @@ const createPreviewImage = (data, width, height, orientation) => {
 
   // draw the image
   ctx.drawImage(data, 0, 0, width, height);
-  // end draw image
-  ctx.restore();
 
-  // data has been transferred to canvas
+  // data has been transferred to canvas ( if was ImageBitmap )
   if (data.close) {
     data.close();
   }
 
-  return canvas;
-};
+  // end draw image
+  ctx.restore();
 
-const drawCenteredImage = (ctx, width, height, image, scalar) => {
-  ctx.drawImage(
-    image,
-    width * 0.5 - scalar * image.width * 0.5,
-    height * 0.5 - scalar * image.height * 0.5,
-    scalar * image.width,
-    scalar * image.height
-  );
+  return canvas;
 };
 
 const IMAGE_SCALE_SPRING_PROPS = {
@@ -81,87 +74,78 @@ const IMAGE_SCALE_SPRING_PROPS = {
   mass: 10
 };
 
-const createImagePresenterView = fpAPI =>
+const createImageView = fpAPI =>
   fpAPI.utils.createView({
     name: 'image-preview',
-    tag: 'canvas',
+    tag: 'div',
     ignoreRect: true,
     create: ({ root, props }) => {
-      root.element.width = 0;
-      root.element.height = 0;
+      root.ref.clip = document.createElement('div');
+      root.element.appendChild(root.ref.clip);
     },
     write: fpAPI.utils.createRoute({
-      DID_LOAD_PREVIEW_IMAGE: ({ root, props, action }) => {
+      DID_IMAGE_PREVIEW_LOAD: ({ root, props, action }) => {
+        const { id } = props;
+
+        // get item props
+        const item = root.query('GET_ITEM', { id: props.id });
+        const crop = item.getMetadata('crop') || {
+          rect: {
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 1
+          },
+          aspectRatio: action.height / action.width
+        };
+
         // scale canvas based on pixel density
         const pixelDensityFactor = window.devicePixelRatio;
 
-        // image ratio
-        const imageRatio = action.height / action.width;
+        // the max height of the preview container
+        const containerMaxHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
-        // determine retina width and height
+        // calculate scaled preview image size
         const containerWidth = root.rect.inner.width;
-        const containerMaxHeight = root.query('GET_MAX_PREVIEW_HEIGHT');
+        const previewImageRatio = action.height / action.width;
+        const previewWidth = containerWidth;
+        const previewHeight = containerWidth * previewImageRatio;
 
-        const targetWidth = containerWidth * pixelDensityFactor;
-        const targetHeight = Math.min(
-          containerMaxHeight * pixelDensityFactor,
-          imageRatio * containerWidth * pixelDensityFactor
-        );
-
-        // image was contained?
-        const contained = imageRatio * containerWidth > containerMaxHeight;
-
-        // set new root dimensions
-        root.element.width = targetWidth;
-        root.element.height = targetHeight;
-
-        // draw preview
+        // render scaled preview image
         const previewImage = createPreviewImage(
           action.data,
-          action.width,
-          action.height,
+          previewWidth * pixelDensityFactor,
+          previewHeight * pixelDensityFactor,
           action.orientation
         );
 
-        // draw preview in root container
-        const scalarFront = targetHeight / previewImage.height;
-        const ctx = root.element.getContext('2d');
+        // calculate crop container size
+        const clipHeight = Math.min(previewHeight, containerMaxHeight);
+        const clipWidth = clipHeight / crop.aspectRatio;
 
-        // draw back fill image
-        if (contained) {
-          // scalar of the background image
-          const scalarBack = Math.max(
-            targetWidth / previewImage.width,
-            targetHeight / previewImage.height
-          );
+        // render image container that is fixed to crop ratio
+        root.ref.clip.style.cssText = `
+                    width:${clipWidth}px;
+                    height:${clipHeight}px;
+                `;
 
-          // draw the background image
-          drawCenteredImage(
-            ctx,
-            root.element.width,
-            root.element.height,
-            previewImage,
-            scalarBack
-          );
+        // calculate scalar based on if the clip rectangle has been scaled down
+        const previewScalar = clipHeight / (previewHeight * crop.rect.height);
 
-          // fade it out a bit by overlaying a dark grey smoke effect
-          ctx.fillStyle = 'rgba(20, 20, 20, .85)';
-          ctx.fillRect(0, 0, targetWidth, targetHeight);
-        }
+        const width = previewWidth * previewScalar;
+        const height = previewHeight * previewScalar;
+        const x = -crop.rect.x * previewWidth * previewScalar;
+        const y = -crop.rect.y * previewHeight * previewScalar;
 
-        // draw the actual image preview
-        drawCenteredImage(
-          ctx,
-          root.element.width,
-          root.element.height,
-          previewImage,
-          scalarFront
-        );
+        previewImage.style.cssText = `
+                    width:${width}px;
+                    height:${height}px;
+                    transform:translate(${Math.round(x)}px, ${Math.round(y)}px);
+                `;
+        root.ref.clip.appendChild(previewImage);
 
-        // let others know of our fabulous achievement, we'll delay it a bit so the back panel can finish stretching
-        setTimeout(() => {
-          root.dispatch('DID_DRAW_PREVIEW_IMAGE', { id: props.id });
-        }, 250);
+        // let others know of our fabulous achievement (so the image can be faded in)
+        root.dispatch('DID_IMAGE_PREVIEW_DRAW', { id });
       }
     }),
     mixins: {
@@ -174,55 +158,6 @@ const createImagePresenterView = fpAPI =>
     }
   });
 
-const easeInOutSine = t => -0.5 * (Math.cos(Math.PI * t) - 1);
-
-const addGradientSteps = (
-  gradient,
-  color,
-  alpha = 1,
-  easeFn = easeInOutSine,
-  steps = 10,
-  offset = 0
-) => {
-  const range = 1 - offset;
-  const rgb = color.join(',');
-  for (let i = 0; i <= steps; i++) {
-    const p = i / steps;
-    const stop = offset + range * p;
-    gradient.addColorStop(stop, `rgba(${rgb}, ${easeFn(p) * alpha})`);
-  }
-};
-
-const overlayTemplate = document.createElement('canvas');
-const overlayTemplateError = document.createElement('canvas');
-const overlayTemplateSuccess = document.createElement('canvas');
-
-const drawTemplate = (canvas, width, height, color, alphaTarget) => {
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-
-  const horizontalCenter = width * 0.5;
-
-  const grad = ctx.createRadialGradient(
-    horizontalCenter,
-    height + 110,
-    height - 100,
-    horizontalCenter,
-    height + 110,
-    height + 100
-  );
-
-  addGradientSteps(grad, color, alphaTarget, undefined, 8, 0.4);
-
-  ctx.save();
-  ctx.translate(-width * 0.5, 0);
-  ctx.scale(2, 1);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-  ctx.restore();
-};
-
 const applyTemplate = (source, target) => {
   // copy width and height
   target.width = source.width;
@@ -233,40 +168,18 @@ const applyTemplate = (source, target) => {
   ctx.drawImage(source, 0, 0);
 };
 
-const width = 500;
-const height = 200;
-
-drawTemplate(overlayTemplate, width, height, [40, 40, 40], 0.85);
-drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
-drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
-
 const createImageOverlayView = fpAPI =>
   fpAPI.utils.createView({
     name: 'image-preview-overlay',
-    tag: 'div',
+    tag: 'canvas',
     ignoreRect: true,
     create: ({ root, props }) => {
-      // default shadow overlay
-      root.ref.overlayShadow = document.createElement('canvas');
-      applyTemplate(overlayTemplate, root.ref.overlayShadow);
-
-      // error state overlay
-      root.ref.overlayError = document.createElement('canvas');
-      applyTemplate(overlayTemplateError, root.ref.overlayError);
-
-      // success state overlay
-      root.ref.overlaySuccess = document.createElement('canvas');
-      applyTemplate(overlayTemplateSuccess, root.ref.overlaySuccess);
-
-      // add to root
-      root.appendChild(root.ref.overlayShadow);
-      root.appendChild(root.ref.overlayError);
-      root.appendChild(root.ref.overlaySuccess);
+      applyTemplate(props.template, root.element);
     },
     mixins: {
       styles: ['opacity'],
       animations: {
-        opacity: { type: 'tween', duration: 500 }
+        opacity: { type: 'spring', mass: 25 }
       }
     }
   });
@@ -306,96 +219,83 @@ const BitmapWorker = function() {
   // route messages
   self.onmessage = e => {
     toBitmap(e.data.message, response => {
-      self.postMessage({ id: e.data.id, message: response });
+      // imageBitmap is sent back as transferable
+      self.postMessage({ id: e.data.id, message: response }, [response]);
     });
   };
 
   // resize image data
   const toBitmap = (options, cb) => {
-    const { file, resizeWidth, resizeHeight } = options;
-
-    createImageBitmap(file)
-      .catch(error => {
-        // Firefox 57 will throw an InvalidStateError, this can be resolved by using a file reader and turning the file into a blob, but while Firefox then creates the bitmap it stall the main thread rendering the function useless. So for now, Firefox will call this method and will return null and then fallback to normal preview rendering using canvas
-        cb(null);
-      })
-      .then(imageBitmap => {
-        cb(imageBitmap);
-      });
+    fetch(options.file)
+      .then(response => response.blob())
+      .then(blob => createImageBitmap(blob))
+      .then(imageBitmap => cb(imageBitmap));
   };
 };
 
-const Marker = {
-  JPEG: 0xffd8,
-  APP1: 0xffe1,
-  EXIF: 0x45786966,
-  TIFF: 0x4949,
-  Orientation: 0x0112,
-  Unknown: 0xff00
+const easeInOutSine = t => -0.5 * (Math.cos(Math.PI * t) - 1);
+
+const addGradientSteps = (
+  gradient,
+  color,
+  alpha = 1,
+  easeFn = easeInOutSine,
+  steps = 10,
+  offset = 0
+) => {
+  const range = 1 - offset;
+  const rgb = color.join(',');
+  for (let i = 0; i <= steps; i++) {
+    const p = i / steps;
+    const stop = offset + range * p;
+    gradient.addColorStop(stop, `rgba(${rgb}, ${easeFn(p) * alpha})`);
+  }
 };
 
-const getUint16 = (view, offset, little = false) =>
-  view.getUint16(offset, little);
-const getUint32 = (view, offset, little = false) =>
-  view.getUint32(offset, little);
+const drawTemplate = (canvas, width, height, color, alphaTarget) => {
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
 
-const getImageOrientation = (file, cb) => {
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const view = new DataView(e.target.result);
+  const horizontalCenter = width * 0.5;
 
-    // Every JPEG file starts from binary value '0xFFD8'
-    if (getUint16(view, 0) !== Marker.JPEG) {
-      // This aint no JPEG
-      cb(-1);
-      return;
-    }
+  const grad = ctx.createRadialGradient(
+    horizontalCenter,
+    height + 110,
+    height - 100,
+    horizontalCenter,
+    height + 110,
+    height + 100
+  );
 
-    const length = view.byteLength;
-    let offset = 2;
+  addGradientSteps(grad, color, alphaTarget, undefined, 8, 0.4);
 
-    while (offset < length) {
-      const marker = getUint16(view, offset);
-      offset += 2;
-
-      // There's or APP1 Marker
-      if (marker === Marker.APP1) {
-        if (getUint32(view, (offset += 2)) !== Marker.EXIF) {
-          // no EXIF info defined
-          break;
-        }
-
-        // Get TIFF Header
-        const little = getUint16(view, (offset += 6)) === Marker.TIFF;
-        offset += getUint32(view, offset + 4, little);
-
-        const tags = getUint16(view, offset, little);
-        offset += 2;
-
-        for (let i = 0; i < tags; i++) {
-          // found the orientation tag
-          if (getUint16(view, offset + i * 12, little) === Marker.Orientation) {
-            cb(getUint16(view, offset + i * 12 + 8, little));
-            return;
-          }
-        }
-      } else if ((marker & Marker.Unknown) !== Marker.Unknown) {
-        // Invalid
-        break;
-      } else {
-        offset += getUint16(view, offset);
-      }
-    }
-
-    // Nothing found
-    cb(-1);
-  };
-
-  // we don't need to read the entire file to get the orientation
-  reader.readAsArrayBuffer(file.slice(0, 64 * 1024));
+  ctx.save();
+  ctx.translate(-width * 0.5, 0);
+  ctx.scale(2, 1);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
 };
 
-const createImagePreviewView = fpAPI => {
+const width = 500;
+const height = 200;
+
+const overlayTemplateShadow = document.createElement('canvas');
+const overlayTemplateError = document.createElement('canvas');
+const overlayTemplateSuccess = document.createElement('canvas');
+
+drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
+drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
+drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
+
+const createImageWrapperView = fpAPI => {
+  // create overlay view
+  const overlay = createImageOverlayView(fpAPI);
+
+  /**
+   * Write handler for when preview container has been created
+   */
   const didCreatePreviewContainer = ({ root, props, action }) => {
     const { utils, views } = fpAPI;
     const { createView, createWorker, loadImage } = utils;
@@ -404,23 +304,32 @@ const createImagePreviewView = fpAPI => {
     // we need to get the file data to determine the eventual image size
     const item = root.query('GET_ITEM', id);
 
+    // get url to file (we'll revoke it later on when done)
+    const fileURL = URL.createObjectURL(item.file);
+
+    // orientation info
+    const exif = item.getMetadata('exif') || {};
+    const orientation = exif.orientation || -1;
+
     // fallback
     const loadPreviewFallback = (item, width, height, orientation) => {
       // let's scale the image in the main thread :(
-      loadImage(item.fileURL).then(image => {
+      loadImage(fileURL).then(image => {
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(image, 0, 0, width, height);
-
         previewImageLoaded(canvas, width, height, orientation);
       });
     };
 
     // image is now ready
     const previewImageLoaded = (data, width, height, orientation) => {
-      root.dispatch('DID_LOAD_PREVIEW_IMAGE', {
+      // the file url is no longer needed
+      URL.revokeObjectURL(fileURL);
+
+      root.dispatch('DID_IMAGE_PREVIEW_LOAD', {
         id,
         data,
         width,
@@ -429,59 +338,65 @@ const createImagePreviewView = fpAPI => {
       });
     };
 
-    // we need to check the rotation of the image
-    getImageOrientation(item.file, orientation => {
-      // we use the bounds of the item, times the pixel ratio, and then multiply that once more to get a crips starter image
-      const boundsX = root.rect.element.width * window.devicePixelRatio * 2;
-      const boundsY = boundsX;
+    // determine max size
+    const boundsX = root.rect.element.width * window.devicePixelRatio * 2;
+    const boundsY = boundsX;
 
-      // determine image size of this item
-      getImageScaledSize(item.fileURL, boundsX, boundsY, (width, height) => {
-        // if is rotated incorrectly swap width and height
-        if (orientation >= 5 && orientation <= 8) {
-          [width, height] = [height, width];
-        }
+    // determine image size of this item
+    getImageScaledSize(fileURL, boundsX, boundsY, (width, height) => {
+      // if is rotated incorrectly swap width and height
+      // this makes sure the container dimensions ar rendered correctly
+      if (orientation >= 5 && orientation <= 8) {
+        [width, height] = [height, width];
+      }
 
-        // let writer know
-        root.dispatch('DID_CALCULATE_PREVIEW_IMAGE_SIZE', {
-          id,
-          width,
-          height
-        });
-
-        // if we support scaling using createImageBitmap we use a worker
-        if ('createImageBitmap' in window) {
-          // let's scale the image in a worker
-          const worker = createWorker(BitmapWorker);
-          worker.post(
-            {
-              file: item.file,
-              resizeWidth: width,
-              resizeHeight: height
-            },
-            imageBitmap => {
-              // no bitmap returned, must be something wrong, try the oldschool way
-              if (!imageBitmap) {
-                loadPreviewFallback(item, width, height, orientation);
-                return;
-              }
-
-              // yay we got our bitmap, let's continue showing the preview
-              previewImageLoaded(imageBitmap, width, height, orientation);
-            }
-          );
-        } else {
-          // create fallback preview
-          loadPreviewFallback(item, width, height, orientation);
-        }
+      // we can now scale the panel to the final size
+      root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
+        id,
+        width,
+        height
       });
+
+      // if we support scaling using createImageBitmap we use a worker
+      if ('createImageBitmap' in window) {
+        // let's scale the image in a worker
+        const worker = createWorker(BitmapWorker);
+        worker.post(
+          {
+            file: fileURL
+          },
+          imageBitmap => {
+            // no bitmap returned, must be something wrong,
+            // try the oldschool way
+            if (!imageBitmap) {
+              loadPreviewFallback(item, width, height, orientation);
+              return;
+            }
+
+            // yay we got our bitmap, let's continue showing the preview
+            previewImageLoaded(imageBitmap, width, height, orientation);
+
+            // destroy worker
+            worker.terminate();
+          }
+        );
+      } else {
+        // create fallback preview
+        loadPreviewFallback(item, width, height, orientation);
+      }
     });
   };
 
+  /**
+   * Write handler for when the preview has been loaded
+   */
   const didLoadPreview = ({ root, props }) => {
-    root.ref.overlay.opacity = 1;
+    root.ref.overlayShadow.opacity = 1;
   };
 
+  /**
+   * Write handler for when the preview image is ready to be animated
+   */
   const didDrawPreview = ({ root, props }) => {
     const { image } = root.ref;
 
@@ -491,8 +406,33 @@ const createImagePreviewView = fpAPI => {
     image.opacity = 1;
   };
 
+  /**
+   * Write handler for when the preview has been loaded
+   */
+  const restoreOverlay = ({ root }) => {
+    root.ref.overlayShadow.opacity = 1;
+    root.ref.overlayError.opacity = 0;
+    root.ref.overlaySuccess.opacity = 0;
+  };
+
+  const didThrowError = ({ root }) => {
+    root.ref.overlayShadow.opacity = 0.25;
+    root.ref.overlayError.opacity = 1;
+  };
+
+  const didCompleteProcessing = ({ root }) => {
+    root.ref.overlayShadow.opacity = 0.25;
+    root.ref.overlaySuccess.opacity = 1;
+  };
+
+  /**
+   * Constructor
+   */
   const create = ({ root, props, dispatch }) => {
-    const image = createImagePresenterView(fpAPI);
+    const { id } = props;
+
+    // image view
+    const image = createImageView(fpAPI);
 
     // append image presenter
     root.ref.image = root.appendChildView(
@@ -504,27 +444,48 @@ const createImagePreviewView = fpAPI => {
       })
     );
 
-    // image overlay
-    const overlay = createImageOverlayView(fpAPI);
-
-    // append image overlay
-    root.ref.overlay = root.appendChildView(
+    // image overlays
+    root.ref.overlayShadow = root.appendChildView(
       root.createChildView(overlay, {
+        template: overlayTemplateShadow,
+        opacity: 0
+      })
+    );
+
+    root.ref.overlaySuccess = root.appendChildView(
+      root.createChildView(overlay, {
+        template: overlayTemplateSuccess,
+        opacity: 0
+      })
+    );
+
+    root.ref.overlayError = root.appendChildView(
+      root.createChildView(overlay, {
+        template: overlayTemplateError,
         opacity: 0
       })
     );
 
     // done creating the container, now wait for write so we can use the container element width for our image preview
-    root.dispatch('DID_CREATE_PREVIEW_CONTAINER');
+    root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id });
   };
 
   return fpAPI.utils.createView({
     name: 'image-preview-wrapper',
     create,
     write: fpAPI.utils.createRoute({
-      DID_LOAD_PREVIEW_IMAGE: didLoadPreview,
-      DID_DRAW_PREVIEW_IMAGE: didDrawPreview,
-      DID_CREATE_PREVIEW_CONTAINER: didCreatePreviewContainer
+      // image preview stated
+      DID_IMAGE_PREVIEW_LOAD: didLoadPreview,
+      DID_IMAGE_PREVIEW_DRAW: didDrawPreview,
+      DID_IMAGE_PREVIEW_CONTAINER_CREATE: didCreatePreviewContainer,
+
+      // file states
+      DID_THROW_ITEM_LOAD_ERROR: didThrowError,
+      DID_THROW_ITEM_PROCESSING_ERROR: didThrowError,
+      DID_THROW_ITEM_INVALID: didThrowError,
+      DID_COMPLETE_ITEM_PROCESSING: didCompleteProcessing,
+      DID_START_ITEM_PROCESSING: restoreOverlay,
+      DID_REVERT_ITEM_PROCESSING: restoreOverlay
     })
   });
 };
@@ -535,7 +496,7 @@ const createImagePreviewView = fpAPI => {
 var plugin$1 = fpAPI => {
   const { addFilter, utils } = fpAPI;
   const { Type, createRoute } = utils;
-  const imagePreview = createImagePreviewView(fpAPI);
+  const imagePreview = createImageWrapperView(fpAPI);
 
   // called for each view that is created right after the 'create' method
   addFilter('CREATE_VIEW', viewAPI => {
@@ -568,7 +529,7 @@ var plugin$1 = fpAPI => {
       // exit if image size is too high and no createImageBitmap support
       // this would simply bring the browser to its knees and that is not what we want
       const supportsCreateImageBitmap = 'createImageBitmap' in (window || {});
-      const maxPreviewFileSize = query('GET_MAX_PREVIEW_FILE_SIZE');
+      const maxPreviewFileSize = query('GET_IMAGE_PREVIEW_MAX_FILE_SIZE');
       if (
         !supportsCreateImageBitmap &&
         maxPreviewFileSize &&
@@ -593,23 +554,26 @@ var plugin$1 = fpAPI => {
 
     const didCalculatePreviewSize = ({ root, props, action }) => {
       // maximum height
-      const maxPreviewHeight = root.query('GET_MAX_PREVIEW_HEIGHT');
+      const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
       // calculate scale ratio
       const scaleFactor = root.rect.element.width / action.width;
 
+      // final height
+      const height = Math.min(maxPreviewHeight, action.height * scaleFactor);
+
+      // set height
+      root.ref.imagePreview.element.style.cssText = `height:${height}px`;
+
       // set new panel height
-      root.ref.panel.height = Math.min(
-        maxPreviewHeight,
-        action.height * scaleFactor
-      );
+      root.ref.panel.height = height;
     };
 
     // start writing
     view.registerWriter(
       createRoute({
         DID_LOAD_ITEM: didLoadItem,
-        DID_CALCULATE_PREVIEW_IMAGE_SIZE: didCalculatePreviewSize
+        DID_IMAGE_PREVIEW_CALCULATE_SIZE: didCalculatePreviewSize
       })
     );
   });
@@ -617,14 +581,14 @@ var plugin$1 = fpAPI => {
   // expose plugin
   return {
     options: {
-      // Max image height
-      maxPreviewHeight: [256, Type.INT],
-
       // Enable or disable image preview
       allowImagePreview: [true, Type.BOOLEAN],
 
+      // Max image height
+      imagePreviewMaxHeight: [256, Type.INT],
+
       // Max size of preview file for when createImageBitmap is not supported
-      maxPreviewFileSize: [null, Type.INT]
+      imagePreviewMaxFileSize: [null, Type.INT]
     }
   };
 };

@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.2
+ * FilePondPluginImagePreview 1.0.3
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -193,7 +193,9 @@
     height,
     orientation
   ) {
-    // width and height have already been swapped earlier if orientation was in range below, let's swap back to make this code a bit more readable
+    // width and height have already been swapped earlier
+    // if orientation was in range below, let's swap back to make
+    // this code a bit more readable
     if (orientation >= 5 && orientation <= 8) {
       var _ref = [height, width];
       width = _ref[0];
@@ -219,31 +221,16 @@
 
     // draw the image
     ctx.drawImage(data, 0, 0, width, height);
-    // end draw image
-    ctx.restore();
 
-    // data has been transferred to canvas
+    // data has been transferred to canvas ( if was ImageBitmap )
     if (data.close) {
       data.close();
     }
 
-    return canvas;
-  };
+    // end draw image
+    ctx.restore();
 
-  var drawCenteredImage = function drawCenteredImage(
-    ctx,
-    width,
-    height,
-    image,
-    scalar
-  ) {
-    ctx.drawImage(
-      image,
-      width * 0.5 - scalar * image.width * 0.5,
-      height * 0.5 - scalar * image.height * 0.5,
-      scalar * image.width,
-      scalar * image.height
-    );
+    return canvas;
   };
 
   var IMAGE_SCALE_SPRING_PROPS = {
@@ -253,93 +240,91 @@
     mass: 10
   };
 
-  var createImagePresenterView = function createImagePresenterView(fpAPI) {
+  var createImageView = function createImageView(fpAPI) {
     return fpAPI.utils.createView({
       name: 'image-preview',
-      tag: 'canvas',
+      tag: 'div',
       ignoreRect: true,
       create: function create(_ref) {
         var root = _ref.root;
 
-        root.element.width = 0;
-        root.element.height = 0;
+        root.ref.clip = document.createElement('div');
+        root.element.appendChild(root.ref.clip);
       },
       write: fpAPI.utils.createRoute({
-        DID_LOAD_PREVIEW_IMAGE: function DID_LOAD_PREVIEW_IMAGE(_ref2) {
+        DID_IMAGE_PREVIEW_LOAD: function DID_IMAGE_PREVIEW_LOAD(_ref2) {
           var root = _ref2.root,
             props = _ref2.props,
             action = _ref2.action;
+          var id = props.id;
+
+          // get item props
+
+          var item = root.query('GET_ITEM', { id: props.id });
+          var crop = item.getMetadata('crop') || {
+            rect: {
+              x: 0,
+              y: 0,
+              width: 1,
+              height: 1
+            },
+            aspectRatio: action.height / action.width
+          };
 
           // scale canvas based on pixel density
           var pixelDensityFactor = window.devicePixelRatio;
 
-          // image ratio
-          var imageRatio = action.height / action.width;
+          // the max height of the preview container
+          var containerMaxHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
-          // determine retina width and height
+          // calculate scaled preview image size
           var containerWidth = root.rect.inner.width;
-          var containerMaxHeight = root.query('GET_MAX_PREVIEW_HEIGHT');
+          var previewImageRatio = action.height / action.width;
+          var previewWidth = containerWidth;
+          var previewHeight = containerWidth * previewImageRatio;
 
-          var targetWidth = containerWidth * pixelDensityFactor;
-          var targetHeight = Math.min(
-            containerMaxHeight * pixelDensityFactor,
-            imageRatio * containerWidth * pixelDensityFactor
-          );
-
-          // image was contained?
-          var contained = imageRatio * containerWidth > containerMaxHeight;
-
-          // set new root dimensions
-          root.element.width = targetWidth;
-          root.element.height = targetHeight;
-
-          // draw preview
+          // render scaled preview image
           var previewImage = createPreviewImage(
             action.data,
-            action.width,
-            action.height,
+            previewWidth * pixelDensityFactor,
+            previewHeight * pixelDensityFactor,
             action.orientation
           );
 
-          // draw preview in root container
-          var scalarFront = targetHeight / previewImage.height;
-          var ctx = root.element.getContext('2d');
+          // calculate crop container size
+          var clipHeight = Math.min(previewHeight, containerMaxHeight);
+          var clipWidth = clipHeight / crop.aspectRatio;
 
-          // draw back fill image
-          if (contained) {
-            // scalar of the background image
-            var scalarBack = Math.max(
-              targetWidth / previewImage.width,
-              targetHeight / previewImage.height
-            );
+          // render image container that is fixed to crop ratio
+          root.ref.clip.style.cssText =
+            '\n                    width:' +
+            clipWidth +
+            'px;\n                    height:' +
+            clipHeight +
+            'px;\n                ';
 
-            // draw the background image
-            drawCenteredImage(
-              ctx,
-              root.element.width,
-              root.element.height,
-              previewImage,
-              scalarBack
-            );
+          // calculate scalar based on if the clip rectangle has been scaled down
+          var previewScalar = clipHeight / (previewHeight * crop.rect.height);
 
-            // fade it out a bit by overlaying a dark grey smoke effect
-            ctx.fillStyle = 'rgba(20, 20, 20, .85)';
-            ctx.fillRect(0, 0, targetWidth, targetHeight);
-          }
+          var width = previewWidth * previewScalar;
+          var height = previewHeight * previewScalar;
+          var x = -crop.rect.x * previewWidth * previewScalar;
+          var y = -crop.rect.y * previewHeight * previewScalar;
 
-          // draw the actual image preview
-          drawCenteredImage(
-            ctx,
-            root.element.width,
-            root.element.height,
-            previewImage,
-            scalarFront
-          );
+          previewImage.style.cssText =
+            '\n                    width:' +
+            width +
+            'px;\n                    height:' +
+            height +
+            'px;\n                    transform:translate(' +
+            Math.round(x) +
+            'px, ' +
+            Math.round(y) +
+            'px);\n                ';
+          root.ref.clip.appendChild(previewImage);
 
-          // let others know of our fabulous achievement, we'll delay it a bit so the back panel can finish stretching
-          setTimeout(function() {
-            root.dispatch('DID_DRAW_PREVIEW_IMAGE', { id: props.id });
-          }, 250);
+          // let others know of our fabulous achievement (so the image can be faded in)
+          root.dispatch('DID_IMAGE_PREVIEW_DRAW', { id: id });
         }
       }),
       mixins: {
@@ -353,70 +338,6 @@
     });
   };
 
-  var easeInOutSine = function easeInOutSine(t) {
-    return -0.5 * (Math.cos(Math.PI * t) - 1);
-  };
-
-  var addGradientSteps = function addGradientSteps(gradient, color) {
-    var alpha =
-      arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1;
-    var easeFn =
-      arguments.length > 3 && arguments[3] !== undefined
-        ? arguments[3]
-        : easeInOutSine;
-    var steps =
-      arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 10;
-    var offset =
-      arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 0;
-
-    var range = 1 - offset;
-    var rgb = color.join(',');
-    for (var i = 0; i <= steps; i++) {
-      var p = i / steps;
-      var stop = offset + range * p;
-      gradient.addColorStop(
-        stop,
-        'rgba(' + rgb + ', ' + easeFn(p) * alpha + ')'
-      );
-    }
-  };
-
-  var overlayTemplate = document.createElement('canvas');
-  var overlayTemplateError = document.createElement('canvas');
-  var overlayTemplateSuccess = document.createElement('canvas');
-
-  var drawTemplate = function drawTemplate(
-    canvas,
-    width,
-    height,
-    color,
-    alphaTarget
-  ) {
-    canvas.width = width;
-    canvas.height = height;
-    var ctx = canvas.getContext('2d');
-
-    var horizontalCenter = width * 0.5;
-
-    var grad = ctx.createRadialGradient(
-      horizontalCenter,
-      height + 110,
-      height - 100,
-      horizontalCenter,
-      height + 110,
-      height + 100
-    );
-
-    addGradientSteps(grad, color, alphaTarget, undefined, 8, 0.4);
-
-    ctx.save();
-    ctx.translate(-width * 0.5, 0);
-    ctx.scale(2, 1);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  };
-
   var applyTemplate = function applyTemplate(source, target) {
     // copy width and height
     target.width = source.width;
@@ -427,42 +348,21 @@
     ctx.drawImage(source, 0, 0);
   };
 
-  var width = 500;
-  var height = 200;
-
-  drawTemplate(overlayTemplate, width, height, [40, 40, 40], 0.85);
-  drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
-  drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
-
   var createImageOverlayView = function createImageOverlayView(fpAPI) {
     return fpAPI.utils.createView({
       name: 'image-preview-overlay',
-      tag: 'div',
+      tag: 'canvas',
       ignoreRect: true,
       create: function create(_ref) {
-        var root = _ref.root;
+        var root = _ref.root,
+          props = _ref.props;
 
-        // default shadow overlay
-        root.ref.overlayShadow = document.createElement('canvas');
-        applyTemplate(overlayTemplate, root.ref.overlayShadow);
-
-        // error state overlay
-        root.ref.overlayError = document.createElement('canvas');
-        applyTemplate(overlayTemplateError, root.ref.overlayError);
-
-        // success state overlay
-        root.ref.overlaySuccess = document.createElement('canvas');
-        applyTemplate(overlayTemplateSuccess, root.ref.overlaySuccess);
-
-        // add to root
-        root.appendChild(root.ref.overlayShadow);
-        root.appendChild(root.ref.overlayError);
-        root.appendChild(root.ref.overlaySuccess);
+        applyTemplate(props.template, root.element);
       },
       mixins: {
         styles: ['opacity'],
         animations: {
-          opacity: { type: 'tween', duration: 500 }
+          opacity: { type: 'spring', mass: 25 }
         }
       }
     });
@@ -513,104 +413,104 @@
     // route messages
     self.onmessage = function(e) {
       toBitmap(e.data.message, function(response) {
-        self.postMessage({ id: e.data.id, message: response });
+        // imageBitmap is sent back as transferable
+        self.postMessage({ id: e.data.id, message: response }, [response]);
       });
     };
 
     // resize image data
     var toBitmap = function toBitmap(options, cb) {
-      var file = options.file;
-
-      createImageBitmap(file)
-        .catch(function(error) {
-          // Firefox 57 will throw an InvalidStateError, this can be resolved by using a file reader and turning the file into a blob, but while Firefox then creates the bitmap it stall the main thread rendering the function useless. So for now, Firefox will call this method and will return null and then fallback to normal preview rendering using canvas
-          cb(null);
+      fetch(options.file)
+        .then(function(response) {
+          return response.blob();
+        })
+        .then(function(blob) {
+          return createImageBitmap(blob);
         })
         .then(function(imageBitmap) {
-          cb(imageBitmap);
+          return cb(imageBitmap);
         });
     };
   };
 
-  var Marker = {
-    JPEG: 0xffd8,
-    APP1: 0xffe1,
-    EXIF: 0x45786966,
-    TIFF: 0x4949,
-    Orientation: 0x0112,
-    Unknown: 0xff00
+  var easeInOutSine = function easeInOutSine(t) {
+    return -0.5 * (Math.cos(Math.PI * t) - 1);
   };
 
-  var getUint16 = function getUint16(view, offset) {
-    var little =
-      arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-    return view.getUint16(offset, little);
-  };
-  var getUint32 = function getUint32(view, offset) {
-    var little =
-      arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-    return view.getUint32(offset, little);
-  };
+  var addGradientSteps = function addGradientSteps(gradient, color) {
+    var alpha =
+      arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1;
+    var easeFn =
+      arguments.length > 3 && arguments[3] !== undefined
+        ? arguments[3]
+        : easeInOutSine;
+    var steps =
+      arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 10;
+    var offset =
+      arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 0;
 
-  var getImageOrientation = function getImageOrientation(file, cb) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var view = new DataView(e.target.result);
-
-      // Every JPEG file starts from binary value '0xFFD8'
-      if (getUint16(view, 0) !== Marker.JPEG) {
-        // This aint no JPEG
-        cb(-1);
-        return;
-      }
-
-      var length = view.byteLength;
-      var offset = 2;
-
-      while (offset < length) {
-        var marker = getUint16(view, offset);
-        offset += 2;
-
-        // There's or APP1 Marker
-        if (marker === Marker.APP1) {
-          if (getUint32(view, (offset += 2)) !== Marker.EXIF) {
-            // no EXIF info defined
-            break;
-          }
-
-          // Get TIFF Header
-          var little = getUint16(view, (offset += 6)) === Marker.TIFF;
-          offset += getUint32(view, offset + 4, little);
-
-          var tags = getUint16(view, offset, little);
-          offset += 2;
-
-          for (var i = 0; i < tags; i++) {
-            // found the orientation tag
-            if (
-              getUint16(view, offset + i * 12, little) === Marker.Orientation
-            ) {
-              cb(getUint16(view, offset + i * 12 + 8, little));
-              return;
-            }
-          }
-        } else if ((marker & Marker.Unknown) !== Marker.Unknown) {
-          // Invalid
-          break;
-        } else {
-          offset += getUint16(view, offset);
-        }
-      }
-
-      // Nothing found
-      cb(-1);
-    };
-
-    // we don't need to read the entire file to get the orientation
-    reader.readAsArrayBuffer(file.slice(0, 64 * 1024));
+    var range = 1 - offset;
+    var rgb = color.join(',');
+    for (var i = 0; i <= steps; i++) {
+      var p = i / steps;
+      var stop = offset + range * p;
+      gradient.addColorStop(
+        stop,
+        'rgba(' + rgb + ', ' + easeFn(p) * alpha + ')'
+      );
+    }
   };
 
-  var createImagePreviewView = function createImagePreviewView(fpAPI) {
+  var drawTemplate = function drawTemplate(
+    canvas,
+    width,
+    height,
+    color,
+    alphaTarget
+  ) {
+    canvas.width = width;
+    canvas.height = height;
+    var ctx = canvas.getContext('2d');
+
+    var horizontalCenter = width * 0.5;
+
+    var grad = ctx.createRadialGradient(
+      horizontalCenter,
+      height + 110,
+      height - 100,
+      horizontalCenter,
+      height + 110,
+      height + 100
+    );
+
+    addGradientSteps(grad, color, alphaTarget, undefined, 8, 0.4);
+
+    ctx.save();
+    ctx.translate(-width * 0.5, 0);
+    ctx.scale(2, 1);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  };
+
+  var width = 500;
+  var height = 200;
+
+  var overlayTemplateShadow = document.createElement('canvas');
+  var overlayTemplateError = document.createElement('canvas');
+  var overlayTemplateSuccess = document.createElement('canvas');
+
+  drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
+  drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
+  drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
+
+  var createImageWrapperView = function createImageWrapperView(fpAPI) {
+    // create overlay view
+    var overlay = createImageOverlayView(fpAPI);
+
+    /**
+     * Write handler for when preview container has been created
+     */
     var didCreatePreviewContainer = function didCreatePreviewContainer(_ref) {
       var root = _ref.root,
         props = _ref.props;
@@ -624,6 +524,13 @@
 
       var item = root.query('GET_ITEM', id);
 
+      // get url to file (we'll revoke it later on when done)
+      var fileURL = URL.createObjectURL(item.file);
+
+      // orientation info
+      var exif = item.getMetadata('exif') || {};
+      var orientation = exif.orientation || -1;
+
       // fallback
       var loadPreviewFallback = function loadPreviewFallback(
         item,
@@ -632,13 +539,12 @@
         orientation
       ) {
         // let's scale the image in the main thread :(
-        loadImage(item.fileURL).then(function(image) {
+        loadImage(fileURL).then(function(image) {
           var canvas = document.createElement('canvas');
           canvas.width = width;
           canvas.height = height;
           var ctx = canvas.getContext('2d');
           ctx.drawImage(image, 0, 0, width, height);
-
           previewImageLoaded(canvas, width, height, orientation);
         });
       };
@@ -650,7 +556,10 @@
         height,
         orientation
       ) {
-        root.dispatch('DID_LOAD_PREVIEW_IMAGE', {
+        // the file url is no longer needed
+        URL.revokeObjectURL(fileURL);
+
+        root.dispatch('DID_IMAGE_PREVIEW_LOAD', {
           id: id,
           data: data,
           width: width,
@@ -659,66 +568,69 @@
         });
       };
 
-      // we need to check the rotation of the image
-      getImageOrientation(item.file, function(orientation) {
-        // we use the bounds of the item, times the pixel ratio, and then multiply that once more to get a crips starter image
-        var boundsX = root.rect.element.width * window.devicePixelRatio * 2;
-        var boundsY = boundsX;
+      // determine max size
+      var boundsX = root.rect.element.width * window.devicePixelRatio * 2;
+      var boundsY = boundsX;
 
-        // determine image size of this item
-        getImageScaledSize(item.fileURL, boundsX, boundsY, function(
-          width,
-          height
-        ) {
-          // if is rotated incorrectly swap width and height
-          if (orientation >= 5 && orientation <= 8) {
-            var _ref2 = [height, width];
-            width = _ref2[0];
-            height = _ref2[1];
-          }
+      // determine image size of this item
+      getImageScaledSize(fileURL, boundsX, boundsY, function(width, height) {
+        // if is rotated incorrectly swap width and height
+        // this makes sure the container dimensions ar rendered correctly
+        if (orientation >= 5 && orientation <= 8) {
+          var _ref2 = [height, width];
+          width = _ref2[0];
+          height = _ref2[1];
+        }
 
-          // let writer know
-          root.dispatch('DID_CALCULATE_PREVIEW_IMAGE_SIZE', {
-            id: id,
-            width: width,
-            height: height
-          });
-
-          // if we support scaling using createImageBitmap we use a worker
-          if ('createImageBitmap' in window) {
-            // let's scale the image in a worker
-            var worker = createWorker(BitmapWorker);
-            worker.post(
-              {
-                file: item.file,
-                resizeWidth: width,
-                resizeHeight: height
-              },
-              function(imageBitmap) {
-                // no bitmap returned, must be something wrong, try the oldschool way
-                if (!imageBitmap) {
-                  loadPreviewFallback(item, width, height, orientation);
-                  return;
-                }
-
-                // yay we got our bitmap, let's continue showing the preview
-                previewImageLoaded(imageBitmap, width, height, orientation);
-              }
-            );
-          } else {
-            // create fallback preview
-            loadPreviewFallback(item, width, height, orientation);
-          }
+        // we can now scale the panel to the final size
+        root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
+          id: id,
+          width: width,
+          height: height
         });
+
+        // if we support scaling using createImageBitmap we use a worker
+        if ('createImageBitmap' in window) {
+          // let's scale the image in a worker
+          var worker = createWorker(BitmapWorker);
+          worker.post(
+            {
+              file: fileURL
+            },
+            function(imageBitmap) {
+              // no bitmap returned, must be something wrong,
+              // try the oldschool way
+              if (!imageBitmap) {
+                loadPreviewFallback(item, width, height, orientation);
+                return;
+              }
+
+              // yay we got our bitmap, let's continue showing the preview
+              previewImageLoaded(imageBitmap, width, height, orientation);
+
+              // destroy worker
+              worker.terminate();
+            }
+          );
+        } else {
+          // create fallback preview
+          loadPreviewFallback(item, width, height, orientation);
+        }
       });
     };
 
+    /**
+     * Write handler for when the preview has been loaded
+     */
     var didLoadPreview = function didLoadPreview(_ref3) {
       var root = _ref3.root;
 
-      root.ref.overlay.opacity = 1;
+      root.ref.overlayShadow.opacity = 1;
     };
 
+    /**
+     * Write handler for when the preview image is ready to be animated
+     */
     var didDrawPreview = function didDrawPreview(_ref4) {
       var root = _ref4.root;
       var image = root.ref.image;
@@ -730,10 +642,42 @@
       image.opacity = 1;
     };
 
-    var create = function create(_ref5) {
-      var root = _ref5.root,
-        props = _ref5.props;
-      var image = createImagePresenterView(fpAPI);
+    /**
+     * Write handler for when the preview has been loaded
+     */
+    var restoreOverlay = function restoreOverlay(_ref5) {
+      var root = _ref5.root;
+
+      root.ref.overlayShadow.opacity = 1;
+      root.ref.overlayError.opacity = 0;
+      root.ref.overlaySuccess.opacity = 0;
+    };
+
+    var didThrowError = function didThrowError(_ref6) {
+      var root = _ref6.root;
+
+      root.ref.overlayShadow.opacity = 0.25;
+      root.ref.overlayError.opacity = 1;
+    };
+
+    var didCompleteProcessing = function didCompleteProcessing(_ref7) {
+      var root = _ref7.root;
+
+      root.ref.overlayShadow.opacity = 0.25;
+      root.ref.overlaySuccess.opacity = 1;
+    };
+
+    /**
+     * Constructor
+     */
+    var create = function create(_ref8) {
+      var root = _ref8.root,
+        props = _ref8.props;
+      var id = props.id;
+
+      // image view
+
+      var image = createImageView(fpAPI);
 
       // append image presenter
       root.ref.image = root.appendChildView(
@@ -745,27 +689,48 @@
         })
       );
 
-      // image overlay
-      var overlay = createImageOverlayView(fpAPI);
-
-      // append image overlay
-      root.ref.overlay = root.appendChildView(
+      // image overlays
+      root.ref.overlayShadow = root.appendChildView(
         root.createChildView(overlay, {
+          template: overlayTemplateShadow,
+          opacity: 0
+        })
+      );
+
+      root.ref.overlaySuccess = root.appendChildView(
+        root.createChildView(overlay, {
+          template: overlayTemplateSuccess,
+          opacity: 0
+        })
+      );
+
+      root.ref.overlayError = root.appendChildView(
+        root.createChildView(overlay, {
+          template: overlayTemplateError,
           opacity: 0
         })
       );
 
       // done creating the container, now wait for write so we can use the container element width for our image preview
-      root.dispatch('DID_CREATE_PREVIEW_CONTAINER');
+      root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id: id });
     };
 
     return fpAPI.utils.createView({
       name: 'image-preview-wrapper',
       create: create,
       write: fpAPI.utils.createRoute({
-        DID_LOAD_PREVIEW_IMAGE: didLoadPreview,
-        DID_DRAW_PREVIEW_IMAGE: didDrawPreview,
-        DID_CREATE_PREVIEW_CONTAINER: didCreatePreviewContainer
+        // image preview stated
+        DID_IMAGE_PREVIEW_LOAD: didLoadPreview,
+        DID_IMAGE_PREVIEW_DRAW: didDrawPreview,
+        DID_IMAGE_PREVIEW_CONTAINER_CREATE: didCreatePreviewContainer,
+
+        // file states
+        DID_THROW_ITEM_LOAD_ERROR: didThrowError,
+        DID_THROW_ITEM_PROCESSING_ERROR: didThrowError,
+        DID_THROW_ITEM_INVALID: didThrowError,
+        DID_COMPLETE_ITEM_PROCESSING: didCompleteProcessing,
+        DID_START_ITEM_PROCESSING: restoreOverlay,
+        DID_REVERT_ITEM_PROCESSING: restoreOverlay
       })
     });
   };
@@ -779,7 +744,7 @@
     var Type = utils.Type,
       createRoute = utils.createRoute;
 
-    var imagePreview = createImagePreviewView(fpAPI);
+    var imagePreview = createImageWrapperView(fpAPI);
 
     // called for each view that is created right after the 'create' method
     addFilter('CREATE_VIEW', function(viewAPI) {
@@ -818,7 +783,7 @@
         // exit if image size is too high and no createImageBitmap support
         // this would simply bring the browser to its knees and that is not what we want
         var supportsCreateImageBitmap = 'createImageBitmap' in (window || {});
-        var maxPreviewFileSize = query('GET_MAX_PREVIEW_FILE_SIZE');
+        var maxPreviewFileSize = query('GET_IMAGE_PREVIEW_MAX_FILE_SIZE');
         if (
           !supportsCreateImageBitmap &&
           maxPreviewFileSize &&
@@ -848,23 +813,26 @@
           action = _ref2.action;
 
         // maximum height
-        var maxPreviewHeight = root.query('GET_MAX_PREVIEW_HEIGHT');
+        var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
         // calculate scale ratio
         var scaleFactor = root.rect.element.width / action.width;
 
+        // final height
+        var height = Math.min(maxPreviewHeight, action.height * scaleFactor);
+
+        // set height
+        root.ref.imagePreview.element.style.cssText = 'height:' + height + 'px';
+
         // set new panel height
-        root.ref.panel.height = Math.min(
-          maxPreviewHeight,
-          action.height * scaleFactor
-        );
+        root.ref.panel.height = height;
       };
 
       // start writing
       view.registerWriter(
         createRoute({
           DID_LOAD_ITEM: didLoadItem,
-          DID_CALCULATE_PREVIEW_IMAGE_SIZE: didCalculatePreviewSize
+          DID_IMAGE_PREVIEW_CALCULATE_SIZE: didCalculatePreviewSize
         })
       );
     });
@@ -872,14 +840,14 @@
     // expose plugin
     return {
       options: {
-        // Max image height
-        maxPreviewHeight: [256, Type.INT],
-
         // Enable or disable image preview
         allowImagePreview: [true, Type.BOOLEAN],
 
+        // Max image height
+        imagePreviewMaxHeight: [256, Type.INT],
+
         // Max size of preview file for when createImageBitmap is not supported
-        maxPreviewFileSize: [null, Type.INT]
+        imagePreviewMaxFileSize: [null, Type.INT]
       }
     };
   };
