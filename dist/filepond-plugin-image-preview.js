@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.3
+ * FilePondPluginImagePreview 1.0.4
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -275,7 +275,7 @@
           var pixelDensityFactor = window.devicePixelRatio;
 
           // the max height of the preview container
-          var containerMaxHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
+          var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
           // calculate scaled preview image size
           var containerWidth = root.rect.inner.width;
@@ -292,16 +292,16 @@
           );
 
           // calculate crop container size
-          var clipHeight = Math.min(previewHeight, containerMaxHeight);
-          var clipWidth = clipHeight / crop.aspectRatio;
+          var clipHeight = Math.min(
+            containerWidth * crop.aspectRatio,
+            maxPreviewHeight
+          );
 
-          // render image container that is fixed to crop ratio
-          root.ref.clip.style.cssText =
-            '\n                    width:' +
-            clipWidth +
-            'px;\n                    height:' +
-            clipHeight +
-            'px;\n                ';
+          var clipWidth = clipHeight / crop.aspectRatio;
+          if (clipWidth > previewWidth) {
+            clipWidth = previewWidth;
+            clipHeight = clipWidth * crop.aspectRatio;
+          }
 
           // calculate scalar based on if the clip rectangle has been scaled down
           var previewScalar = clipHeight / (previewHeight * crop.rect.height);
@@ -311,6 +311,15 @@
           var x = -crop.rect.x * previewWidth * previewScalar;
           var y = -crop.rect.y * previewHeight * previewScalar;
 
+          // apply styles
+          root.ref.clip.style.cssText =
+            '\n                    width:' +
+            clipWidth +
+            'px;\n                    height:' +
+            clipHeight +
+            'px;\n                ';
+
+          // position image
           previewImage.style.cssText =
             '\n                    width:' +
             width +
@@ -812,14 +821,28 @@
           props = _ref2.props,
           action = _ref2.action;
 
+        // we need the item to get to the crop size
+        var item = root.query('GET_ITEM', { id: props.id });
+        var crop = item.getMetadata('crop') || {
+          rect: {
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 1
+          },
+          aspectRatio: action.height / action.width
+        };
+
         // maximum height
         var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
-        // calculate scale ratio
-        var scaleFactor = root.rect.element.width / action.width;
-
-        // final height
-        var height = Math.min(maxPreviewHeight, action.height * scaleFactor);
+        // const crop width
+        var height = Math.min(action.height, maxPreviewHeight);
+        var width = height / crop.aspectRatio;
+        if (width > root.rect.element.width) {
+          width = root.rect.element.width;
+          height = width * crop.aspectRatio;
+        }
 
         // set height
         root.ref.imagePreview.element.style.cssText = 'height:' + height + 'px';

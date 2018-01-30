@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.3
+ * FilePondPluginImagePreview 1.0.4
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -103,7 +103,7 @@ const createImageView = fpAPI =>
         const pixelDensityFactor = window.devicePixelRatio;
 
         // the max height of the preview container
-        const containerMaxHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
+        const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
         // calculate scaled preview image size
         const containerWidth = root.rect.inner.width;
@@ -120,14 +120,16 @@ const createImageView = fpAPI =>
         );
 
         // calculate crop container size
-        const clipHeight = Math.min(previewHeight, containerMaxHeight);
-        const clipWidth = clipHeight / crop.aspectRatio;
+        let clipHeight = Math.min(
+          containerWidth * crop.aspectRatio,
+          maxPreviewHeight
+        );
 
-        // render image container that is fixed to crop ratio
-        root.ref.clip.style.cssText = `
-                    width:${clipWidth}px;
-                    height:${clipHeight}px;
-                `;
+        let clipWidth = clipHeight / crop.aspectRatio;
+        if (clipWidth > previewWidth) {
+          clipWidth = previewWidth;
+          clipHeight = clipWidth * crop.aspectRatio;
+        }
 
         // calculate scalar based on if the clip rectangle has been scaled down
         const previewScalar = clipHeight / (previewHeight * crop.rect.height);
@@ -137,6 +139,13 @@ const createImageView = fpAPI =>
         const x = -crop.rect.x * previewWidth * previewScalar;
         const y = -crop.rect.y * previewHeight * previewScalar;
 
+        // apply styles
+        root.ref.clip.style.cssText = `
+                    width:${clipWidth}px;
+                    height:${clipHeight}px;
+                `;
+
+        // position image
         previewImage.style.cssText = `
                     width:${width}px;
                     height:${height}px;
@@ -553,14 +562,28 @@ var plugin$1 = fpAPI => {
     };
 
     const didCalculatePreviewSize = ({ root, props, action }) => {
+      // we need the item to get to the crop size
+      const item = root.query('GET_ITEM', { id: props.id });
+      const crop = item.getMetadata('crop') || {
+        rect: {
+          x: 0,
+          y: 0,
+          width: 1,
+          height: 1
+        },
+        aspectRatio: action.height / action.width
+      };
+
       // maximum height
       const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
-      // calculate scale ratio
-      const scaleFactor = root.rect.element.width / action.width;
-
-      // final height
-      const height = Math.min(maxPreviewHeight, action.height * scaleFactor);
+      // const crop width
+      let height = Math.min(action.height, maxPreviewHeight);
+      let width = height / crop.aspectRatio;
+      if (width > root.rect.element.width) {
+        width = root.rect.element.width;
+        height = width * crop.aspectRatio;
+      }
 
       // set height
       root.ref.imagePreview.element.style.cssText = `height:${height}px`;
