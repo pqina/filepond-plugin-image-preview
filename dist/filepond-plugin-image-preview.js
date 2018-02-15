@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.4
+ * FilePondPluginImagePreview 1.0.5
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -193,6 +193,10 @@
     height,
     orientation
   ) {
+    // round
+    width = Math.round(width);
+    height = Math.round(height);
+
     // width and height have already been swapped earlier
     // if orientation was in range below, let's swap back to make
     // this code a bit more readable
@@ -222,13 +226,13 @@
     // draw the image
     ctx.drawImage(data, 0, 0, width, height);
 
-    // data has been transferred to canvas ( if was ImageBitmap )
-    if (data.close) {
-      data.close();
-    }
-
     // end draw image
     ctx.restore();
+
+    // data has been transferred to canvas ( if was ImageBitmap )
+    if ('close' in data) {
+      data.close();
+    }
 
     return canvas;
   };
@@ -258,9 +262,26 @@
             action = _ref2.action;
           var id = props.id;
 
-          // get item props
+          // get item
 
           var item = root.query('GET_ITEM', { id: props.id });
+
+          // orientation info
+          var exif = item.getMetadata('exif') || {};
+          var orientation = exif.orientation || -1;
+
+          // get width and height from action, and swap of orientation is incorrect
+          var _action$data = action.data,
+            width = _action$data.width,
+            height = _action$data.height;
+
+          if (orientation >= 5 && orientation <= 8) {
+            var _ref3 = [height, width];
+            width = _ref3[0];
+            height = _ref3[1];
+          }
+
+          // get item props
           var crop = item.getMetadata('crop') || {
             rect: {
               x: 0,
@@ -268,34 +289,46 @@
               width: 1,
               height: 1
             },
-            aspectRatio: action.height / action.width
+            aspectRatio: height / width
           };
 
           // scale canvas based on pixel density
           var pixelDensityFactor = window.devicePixelRatio;
 
           // the max height of the preview container
+          var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+          var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
           var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
           // calculate scaled preview image size
           var containerWidth = root.rect.inner.width;
-          var previewImageRatio = action.height / action.width;
+          var previewImageRatio = height / width;
           var previewWidth = containerWidth;
           var previewHeight = containerWidth * previewImageRatio;
+
+          // calculate image preview height and width
+          var imageHeight =
+            fixedPreviewHeight !== null
+              ? fixedPreviewHeight
+              : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
+          var imageWidth = imageHeight / previewImageRatio;
 
           // render scaled preview image
           var previewImage = createPreviewImage(
             action.data,
-            previewWidth * pixelDensityFactor,
-            previewHeight * pixelDensityFactor,
-            action.orientation
+            imageWidth * pixelDensityFactor,
+            imageHeight * pixelDensityFactor,
+            orientation
           );
 
           // calculate crop container size
-          var clipHeight = Math.min(
-            containerWidth * crop.aspectRatio,
-            maxPreviewHeight
-          );
+          var clipHeight =
+            fixedPreviewHeight !== null
+              ? fixedPreviewHeight
+              : Math.max(
+                  minPreviewHeight,
+                  Math.min(containerWidth * crop.aspectRatio, maxPreviewHeight)
+                );
 
           var clipWidth = clipHeight / crop.aspectRatio;
           if (clipWidth > previewWidth) {
@@ -306,30 +339,30 @@
           // calculate scalar based on if the clip rectangle has been scaled down
           var previewScalar = clipHeight / (previewHeight * crop.rect.height);
 
-          var width = previewWidth * previewScalar;
-          var height = previewHeight * previewScalar;
+          width = previewWidth * previewScalar;
+          height = previewHeight * previewScalar;
           var x = -crop.rect.x * previewWidth * previewScalar;
           var y = -crop.rect.y * previewHeight * previewScalar;
 
           // apply styles
           root.ref.clip.style.cssText =
-            '\n                    width:' +
-            clipWidth +
-            'px;\n                    height:' +
-            clipHeight +
+            '\n                    width: ' +
+            Math.round(clipWidth) +
+            'px;\n                    height: ' +
+            Math.round(clipHeight) +
             'px;\n                ';
 
           // position image
           previewImage.style.cssText =
-            '\n                    width:' +
-            width +
-            'px;\n                    height:' +
-            height +
-            'px;\n                    transform:translate(' +
+            '\n                    width: ' +
+            Math.round(width) +
+            'px;\n                    height: ' +
+            Math.round(height) +
+            'px;\n                    transform: translate(' +
             Math.round(x) +
             'px, ' +
             Math.round(y) +
-            'px);\n                ';
+            'px) rotateZ(0.00001deg);\n                ';
           root.ref.clip.appendChild(previewImage);
 
           // let others know of our fabulous achievement (so the image can be faded in)
@@ -377,44 +410,6 @@
     });
   };
 
-  var getImageSize = function getImageSize(url, cb) {
-    var image = new Image();
-    image.onload = function() {
-      cb(image.naturalWidth, image.naturalHeight);
-    };
-    image.src = url;
-  };
-
-  var fitToBounds = function fitToBounds(
-    width,
-    height,
-    boundsWidth,
-    boundsHeight
-  ) {
-    var resizeFactor = Math.min(boundsWidth / width, boundsHeight / height);
-    return {
-      width: Math.round(width * resizeFactor),
-      height: Math.round(height * resizeFactor)
-    };
-  };
-
-  var getImageScaledSize = function getImageScaledSize(
-    file,
-    boundsWidth,
-    boundsHeight,
-    cb
-  ) {
-    getImageSize(file, function(naturalWidth, naturalHeight) {
-      var size = fitToBounds(
-        naturalWidth,
-        naturalHeight,
-        boundsWidth,
-        boundsHeight
-      );
-      cb(size.width, size.height);
-    });
-  };
-
   /**
    * Bitmap Worker
    */
@@ -440,6 +435,17 @@
           return cb(imageBitmap);
         });
     };
+  };
+
+  var getImageSize = function getImageSize(url, cb) {
+    var image = new Image();
+    image.onload = function() {
+      var width = image.naturalWidth;
+      var height = image.naturalHeight;
+      image = null;
+      cb(width, height);
+    };
+    image.src = url;
   };
 
   var easeInOutSine = function easeInOutSine(t) {
@@ -536,10 +542,6 @@
       // get url to file (we'll revoke it later on when done)
       var fileURL = URL.createObjectURL(item.file);
 
-      // orientation info
-      var exif = item.getMetadata('exif') || {};
-      var orientation = exif.orientation || -1;
-
       // fallback
       var loadPreviewFallback = function loadPreviewFallback(
         item,
@@ -548,49 +550,23 @@
         orientation
       ) {
         // let's scale the image in the main thread :(
-        loadImage(fileURL).then(function(image) {
-          var canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          var ctx = canvas.getContext('2d');
-          ctx.drawImage(image, 0, 0, width, height);
-          previewImageLoaded(canvas, width, height, orientation);
-        });
+        loadImage(fileURL).then(previewImageLoaded);
       };
 
       // image is now ready
-      var previewImageLoaded = function previewImageLoaded(
-        data,
-        width,
-        height,
-        orientation
-      ) {
+      var previewImageLoaded = function previewImageLoaded(data) {
         // the file url is no longer needed
         URL.revokeObjectURL(fileURL);
 
+        // the preview is now ready to be drawn
         root.dispatch('DID_IMAGE_PREVIEW_LOAD', {
           id: id,
-          data: data,
-          width: width,
-          height: height,
-          orientation: orientation
+          data: data
         });
       };
 
-      // determine max size
-      var boundsX = root.rect.element.width * window.devicePixelRatio * 2;
-      var boundsY = boundsX;
-
       // determine image size of this item
-      getImageScaledSize(fileURL, boundsX, boundsY, function(width, height) {
-        // if is rotated incorrectly swap width and height
-        // this makes sure the container dimensions ar rendered correctly
-        if (orientation >= 5 && orientation <= 8) {
-          var _ref2 = [height, width];
-          width = _ref2[0];
-          height = _ref2[1];
-        }
-
+      getImageSize(fileURL, function(width, height) {
         // we can now scale the panel to the final size
         root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
           id: id,
@@ -607,23 +583,23 @@
               file: fileURL
             },
             function(imageBitmap) {
+              // destroy worker
+              worker.terminate();
+
               // no bitmap returned, must be something wrong,
               // try the oldschool way
               if (!imageBitmap) {
-                loadPreviewFallback(item, width, height, orientation);
+                loadPreviewFallback(item);
                 return;
               }
 
               // yay we got our bitmap, let's continue showing the preview
-              previewImageLoaded(imageBitmap, width, height, orientation);
-
-              // destroy worker
-              worker.terminate();
+              previewImageLoaded(imageBitmap);
             }
           );
         } else {
           // create fallback preview
-          loadPreviewFallback(item, width, height, orientation);
+          loadPreviewFallback(item);
         }
       });
     };
@@ -631,8 +607,8 @@
     /**
      * Write handler for when the preview has been loaded
      */
-    var didLoadPreview = function didLoadPreview(_ref3) {
-      var root = _ref3.root;
+    var didLoadPreview = function didLoadPreview(_ref2) {
+      var root = _ref2.root;
 
       root.ref.overlayShadow.opacity = 1;
     };
@@ -640,8 +616,8 @@
     /**
      * Write handler for when the preview image is ready to be animated
      */
-    var didDrawPreview = function didDrawPreview(_ref4) {
-      var root = _ref4.root;
+    var didDrawPreview = function didDrawPreview(_ref3) {
+      var root = _ref3.root;
       var image = root.ref.image;
 
       // reveal image
@@ -654,23 +630,23 @@
     /**
      * Write handler for when the preview has been loaded
      */
-    var restoreOverlay = function restoreOverlay(_ref5) {
-      var root = _ref5.root;
+    var restoreOverlay = function restoreOverlay(_ref4) {
+      var root = _ref4.root;
 
       root.ref.overlayShadow.opacity = 1;
       root.ref.overlayError.opacity = 0;
       root.ref.overlaySuccess.opacity = 0;
     };
 
-    var didThrowError = function didThrowError(_ref6) {
-      var root = _ref6.root;
+    var didThrowError = function didThrowError(_ref5) {
+      var root = _ref5.root;
 
       root.ref.overlayShadow.opacity = 0.25;
       root.ref.overlayError.opacity = 1;
     };
 
-    var didCompleteProcessing = function didCompleteProcessing(_ref7) {
-      var root = _ref7.root;
+    var didCompleteProcessing = function didCompleteProcessing(_ref6) {
+      var root = _ref6.root;
 
       root.ref.overlayShadow.opacity = 0.25;
       root.ref.overlaySuccess.opacity = 1;
@@ -679,13 +655,9 @@
     /**
      * Constructor
      */
-    var create = function create(_ref8) {
-      var root = _ref8.root,
-        props = _ref8.props;
-      var id = props.id;
-
-      // image view
-
+    var create = function create(_ref7) {
+      var root = _ref7.root,
+        props = _ref7.props;
       var image = createImageView(fpAPI);
 
       // append image presenter
@@ -719,9 +691,6 @@
           opacity: 0
         })
       );
-
-      // done creating the container, now wait for write so we can use the container element width for our image preview
-      root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id: id });
     };
 
     return fpAPI.utils.createView({
@@ -753,7 +722,9 @@
     var Type = utils.Type,
       createRoute = utils.createRoute;
 
-    var imagePreview = createImageWrapperView(fpAPI);
+    // imagePreviewView
+
+    var imagePreviewView = createImageWrapperView(fpAPI);
 
     // called for each view that is created right after the 'create' method
     addFilter('CREATE_VIEW', function(viewAPI) {
@@ -801,19 +772,13 @@
           return;
         }
 
-        // set panel
-        var panel = fpAPI.views.panel;
-
-        root.ref.panel = view.appendChildView(view.createChildView(panel));
-        root.ref.panel.element.classList.add('filepond--panel-item');
-
-        // set offset height so panel starts small and scales up when the image loads
-        root.ref.panel.height = 10;
-
         // set preview view
         root.ref.imagePreview = view.appendChildView(
-          view.createChildView(imagePreview, { id: id })
+          view.createChildView(imagePreviewView, { id: id })
         );
+
+        // now ready
+        root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id: id });
       };
 
       var didCalculatePreviewSize = function didCalculatePreviewSize(_ref2) {
@@ -821,8 +786,24 @@
           props = _ref2.props,
           action = _ref2.action;
 
-        // we need the item to get to the crop size
+        // get item
         var item = root.query('GET_ITEM', { id: props.id });
+
+        // orientation info
+        var exif = item.getMetadata('exif') || {};
+        var orientation = exif.orientation || -1;
+
+        // get width and height from action, and swap of orientation is incorrect
+        var width = action.width,
+          height = action.height;
+
+        if (orientation >= 5 && orientation <= 8) {
+          var _ref3 = [height, width];
+          width = _ref3[0];
+          height = _ref3[1];
+        }
+
+        // we need the item to get to the crop size
         var crop = item.getMetadata('crop') || {
           rect: {
             x: 0,
@@ -830,25 +811,29 @@
             width: 1,
             height: 1
           },
-          aspectRatio: action.height / action.width
+          aspectRatio: height / width
         };
 
-        // maximum height
+        // get height min and max
+        var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+        var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
         var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
         // const crop width
-        var height = Math.min(action.height, maxPreviewHeight);
-        var width = height / crop.aspectRatio;
+        height =
+          fixedPreviewHeight !== null
+            ? fixedPreviewHeight
+            : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
+
+        width = height / crop.aspectRatio;
         if (width > root.rect.element.width) {
           width = root.rect.element.width;
           height = width * crop.aspectRatio;
         }
 
         // set height
-        root.ref.imagePreview.element.style.cssText = 'height:' + height + 'px';
-
-        // set new panel height
-        root.ref.panel.height = height;
+        root.ref.imagePreview.element.style.cssText =
+          'height:' + Math.round(height) + 'px';
       };
 
       // start writing
@@ -865,6 +850,12 @@
       options: {
         // Enable or disable image preview
         allowImagePreview: [true, Type.BOOLEAN],
+
+        // Fixed preview height
+        imagePreviewHeight: [null, Type.INT],
+
+        // Min image height
+        imagePreviewMinHeight: [44, Type.INT],
 
         // Max image height
         imagePreviewMaxHeight: [256, Type.INT],

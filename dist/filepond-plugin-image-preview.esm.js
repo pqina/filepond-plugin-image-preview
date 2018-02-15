@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.4
+ * FilePondPluginImagePreview 1.0.5
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -29,6 +29,10 @@ const fixImageOrientation = (ctx, width, height, orientation) => {
 
 // draws the preview image
 const createPreviewImage = (data, width, height, orientation) => {
+  // round
+  width = Math.round(width);
+  height = Math.round(height);
+
   // width and height have already been swapped earlier
   // if orientation was in range below, let's swap back to make
   // this code a bit more readable
@@ -56,13 +60,13 @@ const createPreviewImage = (data, width, height, orientation) => {
   // draw the image
   ctx.drawImage(data, 0, 0, width, height);
 
-  // data has been transferred to canvas ( if was ImageBitmap )
-  if (data.close) {
-    data.close();
-  }
-
   // end draw image
   ctx.restore();
+
+  // data has been transferred to canvas ( if was ImageBitmap )
+  if ('close' in data) {
+    data.close();
+  }
 
   return canvas;
 };
@@ -87,8 +91,20 @@ const createImageView = fpAPI =>
       DID_IMAGE_PREVIEW_LOAD: ({ root, props, action }) => {
         const { id } = props;
 
-        // get item props
+        // get item
         const item = root.query('GET_ITEM', { id: props.id });
+
+        // orientation info
+        const exif = item.getMetadata('exif') || {};
+        const orientation = exif.orientation || -1;
+
+        // get width and height from action, and swap of orientation is incorrect
+        let { width, height } = action.data;
+        if (orientation >= 5 && orientation <= 8) {
+          [width, height] = [height, width];
+        }
+
+        // get item props
         const crop = item.getMetadata('crop') || {
           rect: {
             x: 0,
@@ -96,34 +112,46 @@ const createImageView = fpAPI =>
             width: 1,
             height: 1
           },
-          aspectRatio: action.height / action.width
+          aspectRatio: height / width
         };
 
         // scale canvas based on pixel density
         const pixelDensityFactor = window.devicePixelRatio;
 
         // the max height of the preview container
+        const fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+        const minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
         const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
         // calculate scaled preview image size
         const containerWidth = root.rect.inner.width;
-        const previewImageRatio = action.height / action.width;
+        const previewImageRatio = height / width;
         const previewWidth = containerWidth;
         const previewHeight = containerWidth * previewImageRatio;
+
+        // calculate image preview height and width
+        const imageHeight =
+          fixedPreviewHeight !== null
+            ? fixedPreviewHeight
+            : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
+        const imageWidth = imageHeight / previewImageRatio;
 
         // render scaled preview image
         const previewImage = createPreviewImage(
           action.data,
-          previewWidth * pixelDensityFactor,
-          previewHeight * pixelDensityFactor,
-          action.orientation
+          imageWidth * pixelDensityFactor,
+          imageHeight * pixelDensityFactor,
+          orientation
         );
 
         // calculate crop container size
-        let clipHeight = Math.min(
-          containerWidth * crop.aspectRatio,
-          maxPreviewHeight
-        );
+        let clipHeight =
+          fixedPreviewHeight !== null
+            ? fixedPreviewHeight
+            : Math.max(
+                minPreviewHeight,
+                Math.min(containerWidth * crop.aspectRatio, maxPreviewHeight)
+              );
 
         let clipWidth = clipHeight / crop.aspectRatio;
         if (clipWidth > previewWidth) {
@@ -134,22 +162,24 @@ const createImageView = fpAPI =>
         // calculate scalar based on if the clip rectangle has been scaled down
         const previewScalar = clipHeight / (previewHeight * crop.rect.height);
 
-        const width = previewWidth * previewScalar;
-        const height = previewHeight * previewScalar;
+        width = previewWidth * previewScalar;
+        height = previewHeight * previewScalar;
         const x = -crop.rect.x * previewWidth * previewScalar;
         const y = -crop.rect.y * previewHeight * previewScalar;
 
         // apply styles
         root.ref.clip.style.cssText = `
-                    width:${clipWidth}px;
-                    height:${clipHeight}px;
+                    width: ${Math.round(clipWidth)}px;
+                    height: ${Math.round(clipHeight)}px;
                 `;
 
         // position image
         previewImage.style.cssText = `
-                    width:${width}px;
-                    height:${height}px;
-                    transform:translate(${Math.round(x)}px, ${Math.round(y)}px);
+                    width: ${Math.round(width)}px;
+                    height: ${Math.round(height)}px;
+                    transform: translate(${Math.round(x)}px, ${Math.round(
+          y
+        )}px) rotateZ(0.00001deg);
                 `;
         root.ref.clip.appendChild(previewImage);
 
@@ -193,34 +223,6 @@ const createImageOverlayView = fpAPI =>
     }
   });
 
-const getImageSize = (url, cb) => {
-  const image = new Image();
-  image.onload = () => {
-    cb(image.naturalWidth, image.naturalHeight);
-  };
-  image.src = url;
-};
-
-const fitToBounds = (width, height, boundsWidth, boundsHeight) => {
-  const resizeFactor = Math.min(boundsWidth / width, boundsHeight / height);
-  return {
-    width: Math.round(width * resizeFactor),
-    height: Math.round(height * resizeFactor)
-  };
-};
-
-const getImageScaledSize = (file, boundsWidth, boundsHeight, cb) => {
-  getImageSize(file, (naturalWidth, naturalHeight) => {
-    const size = fitToBounds(
-      naturalWidth,
-      naturalHeight,
-      boundsWidth,
-      boundsHeight
-    );
-    cb(size.width, size.height);
-  });
-};
-
 /**
  * Bitmap Worker
  */
@@ -240,6 +242,17 @@ const BitmapWorker = function() {
       .then(blob => createImageBitmap(blob))
       .then(imageBitmap => cb(imageBitmap));
   };
+};
+
+const getImageSize = (url, cb) => {
+  let image = new Image();
+  image.onload = () => {
+    const width = image.naturalWidth;
+    const height = image.naturalHeight;
+    image = null;
+    cb(width, height);
+  };
+  image.src = url;
 };
 
 const easeInOutSine = t => -0.5 * (Math.cos(Math.PI * t) - 1);
@@ -316,49 +329,26 @@ const createImageWrapperView = fpAPI => {
     // get url to file (we'll revoke it later on when done)
     const fileURL = URL.createObjectURL(item.file);
 
-    // orientation info
-    const exif = item.getMetadata('exif') || {};
-    const orientation = exif.orientation || -1;
-
     // fallback
     const loadPreviewFallback = (item, width, height, orientation) => {
       // let's scale the image in the main thread :(
-      loadImage(fileURL).then(image => {
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(image, 0, 0, width, height);
-        previewImageLoaded(canvas, width, height, orientation);
-      });
+      loadImage(fileURL).then(previewImageLoaded);
     };
 
     // image is now ready
-    const previewImageLoaded = (data, width, height, orientation) => {
+    const previewImageLoaded = data => {
       // the file url is no longer needed
       URL.revokeObjectURL(fileURL);
 
+      // the preview is now ready to be drawn
       root.dispatch('DID_IMAGE_PREVIEW_LOAD', {
         id,
-        data,
-        width,
-        height,
-        orientation
+        data
       });
     };
 
-    // determine max size
-    const boundsX = root.rect.element.width * window.devicePixelRatio * 2;
-    const boundsY = boundsX;
-
     // determine image size of this item
-    getImageScaledSize(fileURL, boundsX, boundsY, (width, height) => {
-      // if is rotated incorrectly swap width and height
-      // this makes sure the container dimensions ar rendered correctly
-      if (orientation >= 5 && orientation <= 8) {
-        [width, height] = [height, width];
-      }
-
+    getImageSize(fileURL, (width, height) => {
       // we can now scale the panel to the final size
       root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
         id,
@@ -375,23 +365,23 @@ const createImageWrapperView = fpAPI => {
             file: fileURL
           },
           imageBitmap => {
+            // destroy worker
+            worker.terminate();
+
             // no bitmap returned, must be something wrong,
             // try the oldschool way
             if (!imageBitmap) {
-              loadPreviewFallback(item, width, height, orientation);
+              loadPreviewFallback(item);
               return;
             }
 
             // yay we got our bitmap, let's continue showing the preview
-            previewImageLoaded(imageBitmap, width, height, orientation);
-
-            // destroy worker
-            worker.terminate();
+            previewImageLoaded(imageBitmap);
           }
         );
       } else {
         // create fallback preview
-        loadPreviewFallback(item, width, height, orientation);
+        loadPreviewFallback(item);
       }
     });
   };
@@ -438,9 +428,6 @@ const createImageWrapperView = fpAPI => {
    * Constructor
    */
   const create = ({ root, props, dispatch }) => {
-    const { id } = props;
-
-    // image view
     const image = createImageView(fpAPI);
 
     // append image presenter
@@ -474,9 +461,6 @@ const createImageWrapperView = fpAPI => {
         opacity: 0
       })
     );
-
-    // done creating the container, now wait for write so we can use the container element width for our image preview
-    root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id });
   };
 
   return fpAPI.utils.createView({
@@ -505,7 +489,9 @@ const createImageWrapperView = fpAPI => {
 var plugin$1 = fpAPI => {
   const { addFilter, utils } = fpAPI;
   const { Type, createRoute } = utils;
-  const imagePreview = createImageWrapperView(fpAPI);
+
+  // imagePreviewView
+  const imagePreviewView = createImageWrapperView(fpAPI);
 
   // called for each view that is created right after the 'create' method
   addFilter('CREATE_VIEW', viewAPI => {
@@ -547,23 +533,30 @@ var plugin$1 = fpAPI => {
         return;
       }
 
-      // set panel
-      const { panel } = fpAPI.views;
-      root.ref.panel = view.appendChildView(view.createChildView(panel));
-      root.ref.panel.element.classList.add('filepond--panel-item');
-
-      // set offset height so panel starts small and scales up when the image loads
-      root.ref.panel.height = 10;
-
       // set preview view
       root.ref.imagePreview = view.appendChildView(
-        view.createChildView(imagePreview, { id })
+        view.createChildView(imagePreviewView, { id })
       );
+
+      // now ready
+      root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id });
     };
 
     const didCalculatePreviewSize = ({ root, props, action }) => {
-      // we need the item to get to the crop size
+      // get item
       const item = root.query('GET_ITEM', { id: props.id });
+
+      // orientation info
+      const exif = item.getMetadata('exif') || {};
+      const orientation = exif.orientation || -1;
+
+      // get width and height from action, and swap of orientation is incorrect
+      let { width, height } = action;
+      if (orientation >= 5 && orientation <= 8) {
+        [width, height] = [height, width];
+      }
+
+      // we need the item to get to the crop size
       const crop = item.getMetadata('crop') || {
         rect: {
           x: 0,
@@ -571,25 +564,30 @@ var plugin$1 = fpAPI => {
           width: 1,
           height: 1
         },
-        aspectRatio: action.height / action.width
+        aspectRatio: height / width
       };
 
-      // maximum height
+      // get height min and max
+      const fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+      const minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
       const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
       // const crop width
-      let height = Math.min(action.height, maxPreviewHeight);
-      let width = height / crop.aspectRatio;
+      height =
+        fixedPreviewHeight !== null
+          ? fixedPreviewHeight
+          : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
+
+      width = height / crop.aspectRatio;
       if (width > root.rect.element.width) {
         width = root.rect.element.width;
         height = width * crop.aspectRatio;
       }
 
       // set height
-      root.ref.imagePreview.element.style.cssText = `height:${height}px`;
-
-      // set new panel height
-      root.ref.panel.height = height;
+      root.ref.imagePreview.element.style.cssText = `height:${Math.round(
+        height
+      )}px`;
     };
 
     // start writing
@@ -606,6 +604,12 @@ var plugin$1 = fpAPI => {
     options: {
       // Enable or disable image preview
       allowImagePreview: [true, Type.BOOLEAN],
+
+      // Fixed preview height
+      imagePreviewHeight: [null, Type.INT],
+
+      // Min image height
+      imagePreviewMinHeight: [44, Type.INT],
 
       // Max image height
       imagePreviewMaxHeight: [256, Type.INT],

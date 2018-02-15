@@ -1,14 +1,10 @@
 /*
- * FilePondPluginImagePreview 1.0.4
+ * FilePondPluginImagePreview 1.0.5
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
 .filepond--image-preview-wrapper {
   z-index: 2;
-}
-
-.filepond--panel-item {
-  z-index: 1;
 }
 
 .filepond--image-preview-overlay {
@@ -17,6 +13,7 @@
   left: 0;
   top: 0;
   width: 100%;
+  min-height: 5rem;
   margin: 0;
   opacity: 0;
   z-index: 1;
@@ -52,8 +49,6 @@
   border-radius: 0.45em;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.01);
-  -webkit-transform: rotateZ(0.0001deg);
-  transform: rotateZ(0.0001deg);
 }
 
 .filepond--image-preview {
@@ -67,29 +62,15 @@
   transform-origin: center center;
   background: #222;
   will-change: transform, opacity;
-  overflow: hidden;
 }
-.filepond--image-preview > canvas {
-  position: absolute;
-  opacity: 0.15;
-  z-index: 1;
-}
-.filepond--image-preview > div {
+.filepond--image-preview div {
   position: relative;
   overflow: hidden;
   margin: 0 auto;
-  z-index: 2;
-  -webkit-transform: rotateZ(0.0001deg);
-  transform: rotateZ(0.0001deg);
 }
-.filepond--image-preview > div > canvas {
+.filepond--image-preview canvas {
   position: absolute;
-}
-
-.filepond--panel-item {
-  border-radius: 0.5em;
-  background-color: #64605e;
-}
-.filepond--panel-item .filepond--panel-bottom {
-  box-shadow: 0 0.125em 0.125em -0.125em rgba(0, 0, 0, 0.25);
+  left: 0;
+  top: 0;
+  will-change: transform;
 }
