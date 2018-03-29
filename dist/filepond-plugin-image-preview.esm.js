@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.5
+ * FilePondPluginImagePreview 1.0.6
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -12,7 +12,7 @@ const transforms = {
   2: width => [-1, 0, 0, 1, width, 0],
   3: (width, height) => [-1, 0, 0, -1, width, height],
   4: (width, height) => [1, 0, 0, -1, 0, height],
-  5: [0, 1, 1, 0, 0, 0],
+  5: () => [0, 1, 1, 0, 0, 0],
   6: (width, height) => [0, 1, -1, 0, height, 0],
   7: (width, height) => [0, -1, -1, 0, height, width],
   8: width => [0, -1, 1, 0, 0, width]

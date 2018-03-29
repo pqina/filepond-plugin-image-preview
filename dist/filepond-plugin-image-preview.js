@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.5
+ * FilePondPluginImagePreview 1.0.6
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -157,7 +157,9 @@
     4: function _(width, height) {
       return [1, 0, 0, -1, 0, height];
     },
-    5: [0, 1, 1, 0, 0, 0],
+    5: function _() {
+      return [0, 1, 1, 0, 0, 0];
+    },
     6: function _(width, height) {
       return [0, 1, -1, 0, height, 0];
     },
