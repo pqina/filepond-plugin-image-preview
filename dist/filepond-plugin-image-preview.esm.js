@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.7
+ * FilePondPluginImagePreview 1.0.8
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -300,16 +300,20 @@ const drawTemplate = (canvas, width, height, color, alphaTarget) => {
   ctx.restore();
 };
 
+const hasNavigator = typeof navigator !== 'undefined';
+
 const width = 500;
 const height = 200;
 
-const overlayTemplateShadow = document.createElement('canvas');
-const overlayTemplateError = document.createElement('canvas');
-const overlayTemplateSuccess = document.createElement('canvas');
+const overlayTemplateShadow = hasNavigator && document.createElement('canvas');
+const overlayTemplateError = hasNavigator && document.createElement('canvas');
+const overlayTemplateSuccess = hasNavigator && document.createElement('canvas');
 
-drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
-drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
-drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
+if (hasNavigator) {
+  drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
+  drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
+  drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
+}
 
 const createImageWrapperView = fpAPI => {
   // create overlay view
@@ -620,7 +624,7 @@ var plugin$1 = fpAPI => {
   };
 };
 
-if (document) {
+if (typeof navigator !== 'undefined' && document) {
   // plugin has loaded
   document.dispatchEvent(
     new CustomEvent('FilePond:pluginloaded', { detail: plugin$1 })

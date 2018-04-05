@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.7
+ * FilePondPluginImagePreview 1.0.8
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -510,16 +510,20 @@
     ctx.restore();
   };
 
+  var hasNavigator = typeof navigator !== 'undefined';
+
   var width = 500;
   var height = 200;
 
-  var overlayTemplateShadow = document.createElement('canvas');
-  var overlayTemplateError = document.createElement('canvas');
-  var overlayTemplateSuccess = document.createElement('canvas');
+  var overlayTemplateShadow = hasNavigator && document.createElement('canvas');
+  var overlayTemplateError = hasNavigator && document.createElement('canvas');
+  var overlayTemplateSuccess = hasNavigator && document.createElement('canvas');
 
-  drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
-  drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
-  drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
+  if (hasNavigator) {
+    drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
+    drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
+    drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
+  }
 
   var createImageWrapperView = function createImageWrapperView(fpAPI) {
     // create overlay view
@@ -868,7 +872,7 @@
     };
   };
 
-  if (document) {
+  if (typeof navigator !== 'undefined' && document) {
     // plugin has loaded
     document.dispatchEvent(
       new CustomEvent('FilePond:pluginloaded', { detail: plugin$1 })
