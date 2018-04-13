@@ -3,6 +3,7 @@
     "version": "1.0.8",
     "description": "Image Preview Plugin for FilePond",
     "homepage": "https://pqina.nl/filepond",
+    "repository": "pqina/filepond-plugin-image-preview",
     "main": "dist/filepond-plugin-image-preview.js",
     "browser": "dist/filepond-plugin-image-preview.js",
     "module": "dist/filepond-plugin-image-preview.esm.js",
