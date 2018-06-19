@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.9
+ * FilePondPluginImagePreview 1.0.10
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -726,7 +726,8 @@
     var addFilter = fpAPI.addFilter,
       utils = fpAPI.utils;
     var Type = utils.Type,
-      createRoute = utils.createRoute;
+      createRoute = utils.createRoute,
+      isFile = utils.isFile;
 
     // imagePreviewView
 
@@ -754,7 +755,7 @@
         var item = query('GET_ITEM', id);
 
         // item could theoretically have been removed in the mean time
-        if (!item) {
+        if (!item || !isFile(item.file)) {
           return;
         }
 
