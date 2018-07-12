@@ -4,8 +4,7 @@
  * Please visit https://pqina.nl/filepond for details.
  */
 // test if file is of type image and can be viewed in canvas
-const isPreviewableImage = file =>
-  /^image/.test(file.type) && !/svg/.test(file.type);
+const isPreviewableImage = file => /^image/.test(file.type); // && !/svg/.test(file.type);
 
 const transforms = {
   1: () => [1, 0, 0, 1, 0, 0],

@@ -14,8 +14,8 @@
 
   // test if file is of type image and can be viewed in canvas
   var isPreviewableImage = function isPreviewableImage(file) {
-    return /^image/.test(file.type) && !/svg/.test(file.type);
-  };
+    return /^image/.test(file.type);
+  }; // && !/svg/.test(file.type);
 
   var asyncGenerator = (function() {
     function AwaitValue(value) {
@@ -239,6 +239,10 @@
     return canvas;
   };
 
+  var isBitmap = function isBitmap(file) {
+    return /^image/.test(file.type) && !/svg/.test(file.type);
+  };
+
   var IMAGE_SCALE_SPRING_PROPS = {
     type: 'spring',
     stiffness: 0.5,
@@ -267,6 +271,9 @@
           // get item
 
           var item = root.query('GET_ITEM', { id: props.id });
+
+          // is an svg
+          //const isBitmapData = item.file.type !== 'image/svg+xml';
 
           // orientation info
           var exif = item.getMetadata('exif') || {};
@@ -316,12 +323,14 @@
           var imageWidth = imageHeight / previewImageRatio;
 
           // render scaled preview image
-          var previewImage = createPreviewImage(
-            action.data,
-            imageWidth * pixelDensityFactor,
-            imageHeight * pixelDensityFactor,
-            orientation
-          );
+          var previewImage = isBitmap(item.file)
+            ? createPreviewImage(
+                action.data,
+                imageWidth * pixelDensityFactor,
+                imageHeight * pixelDensityFactor,
+                orientation
+              )
+            : action.data;
 
           // calculate crop container size
           var clipHeight =
@@ -525,6 +534,10 @@
     drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
   }
 
+  var canCreateImageBitmap = function canCreateImageBitmap(file) {
+    return 'createImageBitmap' in window && isBitmap(file);
+  };
+
   var createImageWrapperView = function createImageWrapperView(fpAPI) {
     // create overlay view
     var overlay = createImageOverlayView(fpAPI);
@@ -581,7 +594,7 @@
         });
 
         // if we support scaling using createImageBitmap we use a worker
-        if ('createImageBitmap' in window) {
+        if (canCreateImageBitmap(item.file)) {
           // let's scale the image in a worker
           var worker = createWorker(BitmapWorker);
           worker.post(
@@ -825,6 +838,13 @@
         var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
         var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
         var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
+
+        // scale up width and height when we're dealing with an SVG
+        if (!isBitmap(item.file)) {
+          var scalar = 2048 / width;
+          width *= scalar;
+          height *= scalar;
+        }
 
         // const crop width
         height =

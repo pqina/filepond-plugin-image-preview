@@ -69,6 +69,7 @@
   overflow: hidden;
   margin: 0 auto;
 }
+.filepond--image-preview img,
 .filepond--image-preview canvas {
   position: absolute;
   left: 0;
