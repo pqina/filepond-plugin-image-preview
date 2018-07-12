@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.0.10
+ * FilePondPluginImagePreview 1.1.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -70,6 +70,8 @@ const createPreviewImage = (data, width, height, orientation) => {
   return canvas;
 };
 
+const isBitmap = file => /^image/.test(file.type) && !/svg/.test(file.type);
+
 const IMAGE_SCALE_SPRING_PROPS = {
   type: 'spring',
   stiffness: 0.5,
@@ -92,6 +94,9 @@ const createImageView = fpAPI =>
 
         // get item
         const item = root.query('GET_ITEM', { id: props.id });
+
+        // is an svg
+        //const isBitmapData = item.file.type !== 'image/svg+xml';
 
         // orientation info
         const exif = item.getMetadata('exif') || {};
@@ -136,12 +141,14 @@ const createImageView = fpAPI =>
         const imageWidth = imageHeight / previewImageRatio;
 
         // render scaled preview image
-        const previewImage = createPreviewImage(
-          action.data,
-          imageWidth * pixelDensityFactor,
-          imageHeight * pixelDensityFactor,
-          orientation
-        );
+        const previewImage = isBitmap(item.file)
+          ? createPreviewImage(
+              action.data,
+              imageWidth * pixelDensityFactor,
+              imageHeight * pixelDensityFactor,
+              orientation
+            )
+          : action.data;
 
         // calculate crop container size
         let clipHeight =
@@ -314,6 +321,9 @@ if (hasNavigator) {
   drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
 }
 
+const canCreateImageBitmap = file =>
+  'createImageBitmap' in window && isBitmap(file);
+
 const createImageWrapperView = fpAPI => {
   // create overlay view
   const overlay = createImageOverlayView(fpAPI);
@@ -360,7 +370,7 @@ const createImageWrapperView = fpAPI => {
       });
 
       // if we support scaling using createImageBitmap we use a worker
-      if ('createImageBitmap' in window) {
+      if (canCreateImageBitmap(item.file)) {
         // let's scale the image in a worker
         const worker = createWorker(BitmapWorker);
         worker.post(
@@ -574,6 +584,13 @@ var plugin$1 = fpAPI => {
       const fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
       const minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
       const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
+
+      // scale up width and height when we're dealing with an SVG
+      if (!isBitmap(item.file)) {
+        const scalar = 2048 / width;
+        width *= scalar;
+        height *= scalar;
+      }
 
       // const crop width
       height =
