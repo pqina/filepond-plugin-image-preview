@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.1.0
+ * FilePondPluginImagePreview 1.2.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -87,6 +87,21 @@ const createImageView = fpAPI =>
     create: ({ root, props }) => {
       root.ref.clip = document.createElement('div');
       root.element.appendChild(root.ref.clip);
+
+      const transparencyIndicator = root.query(
+        'GET_IMAGE_PREVIEW_TRANSPARENCY_INDICATOR'
+      );
+      if (transparencyIndicator === null) {
+        return;
+      }
+
+      // grid pattern
+      if (transparencyIndicator === 'grid') {
+        root.element.dataset.transparencyIndicator = transparencyIndicator;
+      } else {
+        // basic color
+        root.element.dataset.transparencyIndicator = 'color';
+      }
     },
     write: fpAPI.utils.createRoute({
       DID_IMAGE_PREVIEW_LOAD: ({ root, props, action }) => {
@@ -95,8 +110,10 @@ const createImageView = fpAPI =>
         // get item
         const item = root.query('GET_ITEM', { id: props.id });
 
-        // is an svg
-        //const isBitmapData = item.file.type !== 'image/svg+xml';
+        // should render background color
+        const transparencyIndicator = root.query(
+          'GET_IMAGE_PREVIEW_TRANSPARENCY_INDICATOR'
+        );
 
         // orientation info
         const exif = item.getMetadata('exif') || {};
@@ -181,6 +198,12 @@ const createImageView = fpAPI =>
 
         // position image
         previewImage.style.cssText = `
+                    ${
+                      transparencyIndicator !== null &&
+                      transparencyIndicator !== 'grid'
+                        ? 'background-color: ' + transparencyIndicator + ';'
+                        : ''
+                    }
                     width: ${Math.round(width)}px;
                     height: ${Math.round(height)}px;
                     transform: translate(${Math.round(x)}px, ${Math.round(
@@ -635,7 +658,10 @@ var plugin$1 = fpAPI => {
       imagePreviewMaxHeight: [256, Type.INT],
 
       // Max size of preview file for when createImageBitmap is not supported
-      imagePreviewMaxFileSize: [null, Type.INT]
+      imagePreviewMaxFileSize: [null, Type.INT],
+
+      // Style of the transparancy indicator used behind images
+      imagePreviewTransparencyIndicator: [null, Type.STRING]
     }
   };
 };

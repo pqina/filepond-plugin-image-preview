@@ -1,6 +1,6 @@
 {
     "name": "filepond-plugin-image-preview",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Image Preview Plugin for FilePond",
     "homepage": "https://pqina.nl/filepond",
     "repository": "pqina/filepond-plugin-image-preview",
@@ -13,6 +13,6 @@
         "url": "https://pqina.nl"
     },
     "peerDependencies": {
-        "filepond": "^1.8.6"
+        "filepond": "^2.0.0"
     }
 }

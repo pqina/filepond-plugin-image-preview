@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.1.0
+ * FilePondPluginImagePreview 1.2.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -260,6 +260,21 @@
 
         root.ref.clip = document.createElement('div');
         root.element.appendChild(root.ref.clip);
+
+        var transparencyIndicator = root.query(
+          'GET_IMAGE_PREVIEW_TRANSPARENCY_INDICATOR'
+        );
+        if (transparencyIndicator === null) {
+          return;
+        }
+
+        // grid pattern
+        if (transparencyIndicator === 'grid') {
+          root.element.dataset.transparencyIndicator = transparencyIndicator;
+        } else {
+          // basic color
+          root.element.dataset.transparencyIndicator = 'color';
+        }
       },
       write: fpAPI.utils.createRoute({
         DID_IMAGE_PREVIEW_LOAD: function DID_IMAGE_PREVIEW_LOAD(_ref2) {
@@ -272,8 +287,10 @@
 
           var item = root.query('GET_ITEM', { id: props.id });
 
-          // is an svg
-          //const isBitmapData = item.file.type !== 'image/svg+xml';
+          // should render background color
+          var transparencyIndicator = root.query(
+            'GET_IMAGE_PREVIEW_TRANSPARENCY_INDICATOR'
+          );
 
           // orientation info
           var exif = item.getMetadata('exif') || {};
@@ -365,6 +382,10 @@
 
           // position image
           previewImage.style.cssText =
+            '\n                    ' +
+            (transparencyIndicator !== null && transparencyIndicator !== 'grid'
+              ? 'background-color: ' + transparencyIndicator + ';'
+              : '') +
             '\n                    width: ' +
             Math.round(width) +
             'px;\n                    height: ' +
@@ -888,7 +909,10 @@
         imagePreviewMaxHeight: [256, Type.INT],
 
         // Max size of preview file for when createImageBitmap is not supported
-        imagePreviewMaxFileSize: [null, Type.INT]
+        imagePreviewMaxFileSize: [null, Type.INT],
+
+        // Style of the transparancy indicator used behind images
+        imagePreviewTransparencyIndicator: [null, Type.STRING]
       }
     };
   };

@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.1.0
+ * FilePondPluginImagePreview 1.2.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -75,4 +75,10 @@
   left: 0;
   top: 0;
   will-change: transform;
+}
+.filepond--image-preview[data-transparency-indicator='grid'] img,
+.filepond--image-preview[data-transparency-indicator='grid'] canvas {
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg' fill='%23eee'%3E%3Cpath d='M0 0 H50 V50 H0'/%3E%3Cpath d='M50 50 H100 V100 H50'/%3E%3C/svg%3E");
+  background-size: 1.25em 1.25em;
 }
