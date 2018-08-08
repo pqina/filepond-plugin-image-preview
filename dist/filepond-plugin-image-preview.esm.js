@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.2.0
+ * FilePondPluginImagePreview 2.0.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -226,23 +226,60 @@ const createImageView = fpAPI =>
     }
   });
 
-const applyTemplate = (source, target) => {
-  // copy width and height
-  target.width = source.width;
-  target.height = source.height;
+/**
+ * Create gradient and mask definitions, we use these in each overlay so we can define them once
+ * Turns out this also helps Safari to render the gradient on time
+ */
+const definitions = `<radialGradient id="filepond--image-preview-radial-gradient" cx=".5" cy="1.25" r="1.15">
+<stop offset='50%' stop-color='#000000'/>
+<stop offset='56%' stop-color='#0a0a0a'/>
+<stop offset='63%' stop-color='#262626'/>
+<stop offset='69%' stop-color='#4f4f4f'/>
+<stop offset='75%' stop-color='#808080'/>
+<stop offset='81%' stop-color='#b1b1b1'/>
+<stop offset='88%' stop-color='#dadada'/>
+<stop offset='94%' stop-color='#f6f6f6'/>
+<stop offset='100%' stop-color='#ffffff'/>
+</radialGradient>
 
-  // draw the template
-  const ctx = target.getContext('2d');
-  ctx.drawImage(source, 0, 0);
+<mask id="filepond--image-preview-masking">
+<rect x="0" y="0" width="500" height="200" fill="url(#filepond--image-preview-radial-gradient)"></rect>
+</mask>`;
+
+const appendDefinitions = () => {
+  if (document.readyState === 'interactive') {
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    defs.style.cssText = 'position:absolute;width:0;height:0';
+    defs.innerHTML = definitions;
+    document.body.appendChild(defs);
+  }
 };
+
+const hasNavigator = typeof navigator !== 'undefined';
+if (hasNavigator) {
+  appendDefinitions();
+  document.addEventListener('readystatechange', appendDefinitions);
+}
+
+// need to know if this is IE11 so we can render the definitions with each overlay
+const isEdgeOrIE = hasNavigator
+  ? document.documentMode || /Edge/.test(navigator.userAgent)
+  : false;
 
 const createImageOverlayView = fpAPI =>
   fpAPI.utils.createView({
     name: 'image-preview-overlay',
-    tag: 'canvas',
+    tag: 'div',
     ignoreRect: true,
     create: ({ root, props }) => {
-      applyTemplate(props.template, root.element);
+      root.element.classList.add(
+        `filepond--image-preview-overlay-${props.status}`
+      );
+      root.element.innerHTML = `<svg width="500" height="200" viewBox="0 0 500 200" preserveAspectRatio="none">
+                ${isEdgeOrIE ? `<defs>${definitions}</defs>` : ''}
+                <rect x="0" width="500" height="200" fill="currentColor" mask="url(#filepond--image-preview-masking)"></rect>
+            </svg>
+            `;
     },
     mixins: {
       styles: ['opacity'],
@@ -284,79 +321,19 @@ const getImageSize = (url, cb) => {
   image.src = url;
 };
 
-const easeInOutSine = t => -0.5 * (Math.cos(Math.PI * t) - 1);
-
-const addGradientSteps = (
-  gradient,
-  color,
-  alpha = 1,
-  easeFn = easeInOutSine,
-  steps = 10,
-  offset = 0
-) => {
-  const range = 1 - offset;
-  const rgb = color.join(',');
-  for (let i = 0; i <= steps; i++) {
-    const p = i / steps;
-    const stop = offset + range * p;
-    gradient.addColorStop(stop, `rgba(${rgb}, ${easeFn(p) * alpha})`);
-  }
-};
-
-const drawTemplate = (canvas, width, height, color, alphaTarget) => {
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-
-  const horizontalCenter = width * 0.5;
-
-  const grad = ctx.createRadialGradient(
-    horizontalCenter,
-    height + 110,
-    height - 100,
-    horizontalCenter,
-    height + 110,
-    height + 100
-  );
-
-  addGradientSteps(grad, color, alphaTarget, undefined, 8, 0.4);
-
-  ctx.save();
-  ctx.translate(-width * 0.5, 0);
-  ctx.scale(2, 1);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-  ctx.restore();
-};
-
-const hasNavigator = typeof navigator !== 'undefined';
-
-const width = 500;
-const height = 200;
-
-const overlayTemplateShadow = hasNavigator && document.createElement('canvas');
-const overlayTemplateError = hasNavigator && document.createElement('canvas');
-const overlayTemplateSuccess = hasNavigator && document.createElement('canvas');
-
-if (hasNavigator) {
-  drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
-  drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
-  drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
-}
-
 const canCreateImageBitmap = file =>
   'createImageBitmap' in window && isBitmap(file);
 
-const createImageWrapperView = fpAPI => {
+const createImageWrapperView = _ => {
   // create overlay view
-  const overlay = createImageOverlayView(fpAPI);
+  const overlay = createImageOverlayView(_);
 
   /**
    * Write handler for when preview container has been created
    */
-  const didCreatePreviewContainer = ({ root, props, action }) => {
-    const { utils, views } = fpAPI;
-    const { createView, createWorker, loadImage } = utils;
+  const didCreatePreviewContainer = ({ root, props }) => {
+    const { utils } = _;
+    const { createWorker, loadImage } = utils;
     const { id } = props;
 
     // we need to get the file data to determine the eventual image size
@@ -425,14 +402,14 @@ const createImageWrapperView = fpAPI => {
   /**
    * Write handler for when the preview has been loaded
    */
-  const didLoadPreview = ({ root, props }) => {
+  const didLoadPreview = ({ root }) => {
     root.ref.overlayShadow.opacity = 1;
   };
 
   /**
    * Write handler for when the preview image is ready to be animated
    */
-  const didDrawPreview = ({ root, props }) => {
+  const didDrawPreview = ({ root }) => {
     const { image } = root.ref;
 
     // reveal image
@@ -463,8 +440,9 @@ const createImageWrapperView = fpAPI => {
   /**
    * Constructor
    */
-  const create = ({ root, props, dispatch }) => {
-    const image = createImageView(fpAPI);
+  const create = ({ root, props }) => {
+    // image view
+    const image = createImageView(_);
 
     // append image presenter
     root.ref.image = root.appendChildView(
@@ -479,30 +457,30 @@ const createImageWrapperView = fpAPI => {
     // image overlays
     root.ref.overlayShadow = root.appendChildView(
       root.createChildView(overlay, {
-        template: overlayTemplateShadow,
-        opacity: 0
+        opacity: 0,
+        status: 'idle'
       })
     );
 
     root.ref.overlaySuccess = root.appendChildView(
       root.createChildView(overlay, {
-        template: overlayTemplateSuccess,
-        opacity: 0
+        opacity: 0,
+        status: 'success'
       })
     );
 
     root.ref.overlayError = root.appendChildView(
       root.createChildView(overlay, {
-        template: overlayTemplateError,
-        opacity: 0
+        opacity: 0,
+        status: 'failure'
       })
     );
   };
 
-  return fpAPI.utils.createView({
+  return _.utils.createView({
     name: 'image-preview-wrapper',
     create,
-    write: fpAPI.utils.createRoute({
+    write: _.utils.createRoute({
       // image preview stated
       DID_IMAGE_PREVIEW_LOAD: didLoadPreview,
       DID_IMAGE_PREVIEW_DRAW: didDrawPreview,

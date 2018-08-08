@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.2.0
+ * FilePondPluginImagePreview 2.0.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -18,24 +18,35 @@
   margin: 0;
   opacity: 0;
   z-index: 1;
-  mix-blend-mode: multiply;
   pointer-events: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
 }
-
-.filepond--image-preview-overlay:nth-of-type(2) {
-  mix-blend-mode: normal;
+.filepond--image-preview-overlay svg {
+  width: 100%;
+  height: auto;
+  color: inherit;
 }
 
-.filepond--image-preview-overlay:nth-of-type(3) {
+.filepond--image-preview-overlay-idle {
+  mix-blend-mode: multiply;
+  color: rgba(40, 40, 40, 0.85);
+}
+
+.filepond--image-preview-overlay-success {
   mix-blend-mode: normal;
+  color: #369763;
+}
+
+.filepond--image-preview-overlay-failure {
+  mix-blend-mode: normal;
+  color: #c44e47;
 }
 
 @supports (-webkit-marquee-repetition: infinite) and (object-fit: fill) {
-  .filepond--image-preview-overlay {
+  .filepond--image-preview-overlay-idle {
     mix-blend-mode: normal;
   }
 }

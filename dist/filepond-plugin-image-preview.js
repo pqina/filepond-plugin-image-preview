@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 1.2.0
+ * FilePondPluginImagePreview 2.0.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -412,26 +412,49 @@
     });
   };
 
-  var applyTemplate = function applyTemplate(source, target) {
-    // copy width and height
-    target.width = source.width;
-    target.height = source.height;
+  /**
+   * Create gradient and mask definitions, we use these in each overlay so we can define them once
+   * Turns out this also helps Safari to render the gradient on time
+   */
+  var definitions =
+    "<radialGradient id=\"filepond--image-preview-radial-gradient\" cx=\".5\" cy=\"1.25\" r=\"1.15\">\n<stop offset='50%' stop-color='#000000'/>\n<stop offset='56%' stop-color='#0a0a0a'/>\n<stop offset='63%' stop-color='#262626'/>\n<stop offset='69%' stop-color='#4f4f4f'/>\n<stop offset='75%' stop-color='#808080'/>\n<stop offset='81%' stop-color='#b1b1b1'/>\n<stop offset='88%' stop-color='#dadada'/>\n<stop offset='94%' stop-color='#f6f6f6'/>\n<stop offset='100%' stop-color='#ffffff'/>\n</radialGradient>\n\n<mask id=\"filepond--image-preview-masking\">\n<rect x=\"0\" y=\"0\" width=\"500\" height=\"200\" fill=\"url(#filepond--image-preview-radial-gradient)\"></rect>\n</mask>";
 
-    // draw the template
-    var ctx = target.getContext('2d');
-    ctx.drawImage(source, 0, 0);
+  var appendDefinitions = function appendDefinitions() {
+    if (document.readyState === 'interactive') {
+      var defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      defs.style.cssText = 'position:absolute;width:0;height:0';
+      defs.innerHTML = definitions;
+      document.body.appendChild(defs);
+    }
   };
+
+  var hasNavigator = typeof navigator !== 'undefined';
+  if (hasNavigator) {
+    appendDefinitions();
+    document.addEventListener('readystatechange', appendDefinitions);
+  }
+
+  // need to know if this is IE11 so we can render the definitions with each overlay
+  var isEdgeOrIE = hasNavigator
+    ? document.documentMode || /Edge/.test(navigator.userAgent)
+    : false;
 
   var createImageOverlayView = function createImageOverlayView(fpAPI) {
     return fpAPI.utils.createView({
       name: 'image-preview-overlay',
-      tag: 'canvas',
+      tag: 'div',
       ignoreRect: true,
       create: function create(_ref) {
         var root = _ref.root,
           props = _ref.props;
 
-        applyTemplate(props.template, root.element);
+        root.element.classList.add(
+          'filepond--image-preview-overlay-' + props.status
+        );
+        root.element.innerHTML =
+          '<svg width="500" height="200" viewBox="0 0 500 200" preserveAspectRatio="none">\n                ' +
+          (isEdgeOrIE ? '<defs>' + definitions + '</defs>' : '') +
+          '\n                <rect x="0" width="500" height="200" fill="currentColor" mask="url(#filepond--image-preview-masking)"></rect>\n            </svg>\n            ';
       },
       mixins: {
         styles: ['opacity'],
@@ -480,88 +503,13 @@
     image.src = url;
   };
 
-  var easeInOutSine = function easeInOutSine(t) {
-    return -0.5 * (Math.cos(Math.PI * t) - 1);
-  };
-
-  var addGradientSteps = function addGradientSteps(gradient, color) {
-    var alpha =
-      arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 1;
-    var easeFn =
-      arguments.length > 3 && arguments[3] !== undefined
-        ? arguments[3]
-        : easeInOutSine;
-    var steps =
-      arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : 10;
-    var offset =
-      arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 0;
-
-    var range = 1 - offset;
-    var rgb = color.join(',');
-    for (var i = 0; i <= steps; i++) {
-      var p = i / steps;
-      var stop = offset + range * p;
-      gradient.addColorStop(
-        stop,
-        'rgba(' + rgb + ', ' + easeFn(p) * alpha + ')'
-      );
-    }
-  };
-
-  var drawTemplate = function drawTemplate(
-    canvas,
-    width,
-    height,
-    color,
-    alphaTarget
-  ) {
-    canvas.width = width;
-    canvas.height = height;
-    var ctx = canvas.getContext('2d');
-
-    var horizontalCenter = width * 0.5;
-
-    var grad = ctx.createRadialGradient(
-      horizontalCenter,
-      height + 110,
-      height - 100,
-      horizontalCenter,
-      height + 110,
-      height + 100
-    );
-
-    addGradientSteps(grad, color, alphaTarget, undefined, 8, 0.4);
-
-    ctx.save();
-    ctx.translate(-width * 0.5, 0);
-    ctx.scale(2, 1);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  };
-
-  var hasNavigator = typeof navigator !== 'undefined';
-
-  var width = 500;
-  var height = 200;
-
-  var overlayTemplateShadow = hasNavigator && document.createElement('canvas');
-  var overlayTemplateError = hasNavigator && document.createElement('canvas');
-  var overlayTemplateSuccess = hasNavigator && document.createElement('canvas');
-
-  if (hasNavigator) {
-    drawTemplate(overlayTemplateShadow, width, height, [40, 40, 40], 0.85);
-    drawTemplate(overlayTemplateError, width, height, [196, 78, 71], 1);
-    drawTemplate(overlayTemplateSuccess, width, height, [54, 151, 99], 1);
-  }
-
   var canCreateImageBitmap = function canCreateImageBitmap(file) {
     return 'createImageBitmap' in window && isBitmap(file);
   };
 
-  var createImageWrapperView = function createImageWrapperView(fpAPI) {
+  var createImageWrapperView = function createImageWrapperView(_) {
     // create overlay view
-    var overlay = createImageOverlayView(fpAPI);
+    var overlay = createImageOverlayView(_);
 
     /**
      * Write handler for when preview container has been created
@@ -569,9 +517,8 @@
     var didCreatePreviewContainer = function didCreatePreviewContainer(_ref) {
       var root = _ref.root,
         props = _ref.props;
-      var utils = fpAPI.utils;
-      var createView = utils.createView,
-        createWorker = utils.createWorker,
+      var utils = _.utils;
+      var createWorker = utils.createWorker,
         loadImage = utils.loadImage;
       var id = props.id;
 
@@ -698,7 +645,9 @@
     var create = function create(_ref7) {
       var root = _ref7.root,
         props = _ref7.props;
-      var image = createImageView(fpAPI);
+
+      // image view
+      var image = createImageView(_);
 
       // append image presenter
       root.ref.image = root.appendChildView(
@@ -713,30 +662,30 @@
       // image overlays
       root.ref.overlayShadow = root.appendChildView(
         root.createChildView(overlay, {
-          template: overlayTemplateShadow,
-          opacity: 0
+          opacity: 0,
+          status: 'idle'
         })
       );
 
       root.ref.overlaySuccess = root.appendChildView(
         root.createChildView(overlay, {
-          template: overlayTemplateSuccess,
-          opacity: 0
+          opacity: 0,
+          status: 'success'
         })
       );
 
       root.ref.overlayError = root.appendChildView(
         root.createChildView(overlay, {
-          template: overlayTemplateError,
-          opacity: 0
+          opacity: 0,
+          status: 'failure'
         })
       );
     };
 
-    return fpAPI.utils.createView({
+    return _.utils.createView({
       name: 'image-preview-wrapper',
       create: create,
-      write: fpAPI.utils.createRoute({
+      write: _.utils.createRoute({
         // image preview stated
         DID_IMAGE_PREVIEW_LOAD: didLoadPreview,
         DID_IMAGE_PREVIEW_DRAW: didDrawPreview,
