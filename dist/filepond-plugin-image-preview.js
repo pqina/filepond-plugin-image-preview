@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.0.0
+ * FilePondPluginImagePreview 3.0.1
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -350,9 +350,13 @@
         var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
         var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
         var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
+
         var panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
-        if (panelAspectRatio) {
+        var allowMultiple = root.query('GET_ALLOW_MULTIPLE');
+
+        if (panelAspectRatio && !allowMultiple) {
           fixedPreviewHeight = containerWidth * panelAspectRatio;
+          aspectRatio = panelAspectRatio;
         }
 
         // determine clip width and height
@@ -1023,6 +1027,7 @@
 
         // stylePanelAspectRatio
         var panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
+        var allowMultiple = root.query('GET_ALLOW_MULTIPLE');
 
         // we need the item to get to the crop size
         var crop = item.getMetadata('crop') || {
@@ -1040,8 +1045,10 @@
         };
 
         // set image aspect ratio as fallback
-        var previewAspectRatio =
-          panelAspectRatio || crop.aspectRatio || height / width;
+        var shouldForcePreviewSize = !allowMultiple && panelAspectRatio;
+        var previewAspectRatio = shouldForcePreviewSize
+          ? panelAspectRatio
+          : crop.aspectRatio || height / width;
 
         // get height min and max
         var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
@@ -1049,7 +1056,7 @@
         var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
         // force to panel aspect ratio
-        if (panelAspectRatio) {
+        if (shouldForcePreviewSize) {
           fixedPreviewHeight = root.rect.element.width * panelAspectRatio;
         }
 
@@ -1067,7 +1074,7 @@
             : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
 
         width = height / previewAspectRatio;
-        if (width > root.rect.element.width || panelAspectRatio) {
+        if (width > root.rect.element.width || shouldForcePreviewSize) {
           width = root.rect.element.width;
           height = width * previewAspectRatio;
         }

@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.0.0
+ * FilePondPluginImagePreview 3.0.1
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -53,7 +53,10 @@
 }
 
 .filepond--image-preview-wrapper {
-  pointer-events: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
   position: absolute;
   left: 0;
   top: 0;

@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.0.0
+ * FilePondPluginImagePreview 3.0.1
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -289,7 +289,7 @@ const createImageView = _ =>
 
       // calculate scaled preview image size
       const imageAspectRatio = image.height / image.width;
-      const aspectRatio = crop.aspectRatio || imageAspectRatio;
+      let aspectRatio = crop.aspectRatio || imageAspectRatio;
 
       // calculate container size
       const containerWidth = root.rect.inner.width;
@@ -298,9 +298,13 @@ const createImageView = _ =>
       let fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
       const minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
       const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
+
       const panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
-      if (panelAspectRatio) {
+      const allowMultiple = root.query('GET_ALLOW_MULTIPLE');
+
+      if (panelAspectRatio && !allowMultiple) {
         fixedPreviewHeight = containerWidth * panelAspectRatio;
+        aspectRatio = panelAspectRatio;
       }
 
       // determine clip width and height
@@ -872,6 +876,7 @@ var plugin$1 = fpAPI => {
 
       // stylePanelAspectRatio
       const panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
+      const allowMultiple = root.query('GET_ALLOW_MULTIPLE');
 
       // we need the item to get to the crop size
       const crop = item.getMetadata('crop') || {
@@ -889,8 +894,10 @@ var plugin$1 = fpAPI => {
       };
 
       // set image aspect ratio as fallback
-      const previewAspectRatio =
-        panelAspectRatio || crop.aspectRatio || height / width;
+      const shouldForcePreviewSize = !allowMultiple && panelAspectRatio;
+      const previewAspectRatio = shouldForcePreviewSize
+        ? panelAspectRatio
+        : crop.aspectRatio || height / width;
 
       // get height min and max
       let fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
@@ -898,7 +905,7 @@ var plugin$1 = fpAPI => {
       let maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
       // force to panel aspect ratio
-      if (panelAspectRatio) {
+      if (shouldForcePreviewSize) {
         fixedPreviewHeight = root.rect.element.width * panelAspectRatio;
       }
 
@@ -916,7 +923,7 @@ var plugin$1 = fpAPI => {
           : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
 
       width = height / previewAspectRatio;
-      if (width > root.rect.element.width || panelAspectRatio) {
+      if (width > root.rect.element.width || shouldForcePreviewSize) {
         width = root.rect.element.width;
         height = width * previewAspectRatio;
       }
