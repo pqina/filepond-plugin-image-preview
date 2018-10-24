@@ -1,8 +1,10 @@
 /*
- * FilePondPluginImagePreview 3.0.1
+ * FilePondPluginImagePreview 3.1.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
+
+/* eslint-disable */
 (function(global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined'
     ? (module.exports = factory())
@@ -563,6 +565,42 @@
     return /^image/.test(file.type) && !/svg/.test(file.type);
   };
 
+  var MAX_WIDTH = 10;
+  var MAX_HEIGHT = 10;
+
+  var calculateAverageColor = function calculateAverageColor(image) {
+    var scalar = Math.min(MAX_WIDTH / image.width, MAX_HEIGHT / image.height);
+
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    var width = (canvas.width = Math.ceil(image.width * scalar));
+    var height = (canvas.height = Math.ceil(image.height * scalar));
+    ctx.drawImage(image, 0, 0, width, height);
+    var data = ctx.getImageData(0, 0, width, height).data;
+    var l = data.length;
+
+    var r = 0;
+    var g = 0;
+    var b = 0;
+    var i = 0;
+
+    for (; i < l; i += 4) {
+      r += data[i] * data[i];
+      g += data[i + 1] * data[i + 1];
+      b += data[i + 2] * data[i + 2];
+    }
+
+    r = averageColor(r, l);
+    g = averageColor(g, l);
+    b = averageColor(b, l);
+
+    return { r: r, g: g, b: b };
+  };
+
+  var averageColor = function averageColor(c, l) {
+    return Math.floor(Math.sqrt(c / (l / 4)));
+  };
+
   var createImageWrapperView = function createImageWrapperView(_) {
     // create overlay view
     var overlay = createImageOverlayView(_);
@@ -592,6 +630,8 @@
 
       var id = props.id;
       var item = root.query('GET_ITEM', { id: id });
+      if (!item) return;
+
       var image = props.preview;
       var crop = item.getMetadata('crop') || {
         center: {
@@ -638,6 +678,8 @@
         props = _ref3.props;
 
       var item = root.query('GET_ITEM', { id: props.id });
+      if (!item) return;
+
       var imageView = root.ref.images[root.ref.images.length - 1];
       imageView.crop = item.getMetadata('crop');
     };
@@ -653,6 +695,8 @@
       }
 
       var item = root.query('GET_ITEM', { id: props.id });
+      if (!item) return;
+
       var crop = item.getMetadata('crop');
       var image = root.ref.images[root.ref.images.length - 1];
 
@@ -684,17 +728,13 @@
       // we need to get the file data to determine the eventual image size
 
       var item = root.query('GET_ITEM', id);
+      if (!item) return;
 
       // get url to file (we'll revoke it later on when done)
       var fileURL = URL.createObjectURL(item.file);
 
       // fallback
-      var loadPreviewFallback = function loadPreviewFallback(
-        item,
-        width,
-        height,
-        orientation
-      ) {
+      var loadPreviewFallback = function loadPreviewFallback() {
         // let's scale the image in the main thread :(
         loadImage(fileURL).then(previewImageLoaded);
       };
@@ -755,6 +795,10 @@
           orientation
         );
 
+        // calculate average image color
+        var averageColor = calculateAverageColor(data);
+        item.setMetadata('color', averageColor);
+
         // data has been transferred to canvas ( if was ImageBitmap )
         if ('close' in data) {
           data.close();
@@ -780,6 +824,7 @@
         if (canCreateImageBitmap(item.file)) {
           // let's scale the image in a worker
           var worker = createWorker(BitmapWorker);
+
           worker.post(
             {
               file: fileURL
@@ -791,7 +836,7 @@
               // no bitmap returned, must be something wrong,
               // try the oldschool way
               if (!imageBitmap) {
-                loadPreviewFallback(item);
+                loadPreviewFallback();
                 return;
               }
 
@@ -801,7 +846,7 @@
           );
         } else {
           // create fallback preview
-          loadPreviewFallback(item);
+          loadPreviewFallback();
         }
       });
     };
@@ -960,7 +1005,7 @@
         var item = query('GET_ITEM', id);
 
         // item could theoretically have been removed in the mean time
-        if (!item || !isFile(item.file)) {
+        if (!item || !isFile(item.file) || item.archived) {
           return;
         }
 
@@ -998,21 +1043,21 @@
           return;
         }
 
-        var _root$ref = root.ref,
-          width = _root$ref.imageWidth,
-          height = _root$ref.imageHeight;
-
-        // no data!
-
-        if (!width || !height) {
-          return;
-        }
-
         var id = props.id;
 
         // get item
 
         var item = root.query('GET_ITEM', { id: id });
+        if (!item) return;
+
+        // no data!
+        var _root$ref = root.ref,
+          width = _root$ref.imageWidth,
+          height = _root$ref.imageHeight;
+
+        if (!width || !height) {
+          return;
+        }
 
         // orientation info
         var exif = item.getMetadata('exif') || {};

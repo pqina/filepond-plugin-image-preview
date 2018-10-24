@@ -1,8 +1,10 @@
 /*
- * FilePondPluginImagePreview 3.0.1
+ * FilePondPluginImagePreview 3.1.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
+
+/* eslint-disable */
 // test if file is of type image and can be viewed in canvas
 const isPreviewableImage = file => /^image/.test(file.type);
 
@@ -470,6 +472,40 @@ const createPreviewImage = (data, width, height, orientation) => {
 
 const isBitmap = file => /^image/.test(file.type) && !/svg/.test(file.type);
 
+const MAX_WIDTH = 10;
+const MAX_HEIGHT = 10;
+
+const calculateAverageColor = image => {
+  const scalar = Math.min(MAX_WIDTH / image.width, MAX_HEIGHT / image.height);
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const width = (canvas.width = Math.ceil(image.width * scalar));
+  const height = (canvas.height = Math.ceil(image.height * scalar));
+  ctx.drawImage(image, 0, 0, width, height);
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const l = data.length;
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let i = 0;
+
+  for (; i < l; i += 4) {
+    r += data[i] * data[i];
+    g += data[i + 1] * data[i + 1];
+    b += data[i + 2] * data[i + 2];
+  }
+
+  r = averageColor(r, l);
+  g = averageColor(g, l);
+  b = averageColor(b, l);
+
+  return { r, g, b };
+};
+
+const averageColor = (c, l) => Math.floor(Math.sqrt(c / (l / 4)));
+
 const createImageWrapperView = _ => {
   // create overlay view
   const overlay = createImageOverlayView(_);
@@ -494,6 +530,8 @@ const createImageWrapperView = _ => {
   const pushImage = ({ root, props }) => {
     const id = props.id;
     const item = root.query('GET_ITEM', { id });
+    if (!item) return;
+
     const image = props.preview;
     const crop = item.getMetadata('crop') || {
       center: {
@@ -537,6 +575,8 @@ const createImageWrapperView = _ => {
 
   const updateImage = ({ root, props }) => {
     const item = root.query('GET_ITEM', { id: props.id });
+    if (!item) return;
+
     const imageView = root.ref.images[root.ref.images.length - 1];
     imageView.crop = item.getMetadata('crop');
   };
@@ -548,6 +588,8 @@ const createImageWrapperView = _ => {
     }
 
     const item = root.query('GET_ITEM', { id: props.id });
+    if (!item) return;
+
     const crop = item.getMetadata('crop');
     const image = root.ref.images[root.ref.images.length - 1];
 
@@ -574,12 +616,13 @@ const createImageWrapperView = _ => {
 
     // we need to get the file data to determine the eventual image size
     const item = root.query('GET_ITEM', id);
+    if (!item) return;
 
     // get url to file (we'll revoke it later on when done)
     const fileURL = URL.createObjectURL(item.file);
 
     // fallback
-    const loadPreviewFallback = (item, width, height, orientation) => {
+    const loadPreviewFallback = () => {
       // let's scale the image in the main thread :(
       loadImage(fileURL).then(previewImageLoaded);
     };
@@ -636,6 +679,10 @@ const createImageWrapperView = _ => {
         orientation
       );
 
+      // calculate average image color
+      const averageColor = calculateAverageColor(data);
+      item.setMetadata('color', averageColor);
+
       // data has been transferred to canvas ( if was ImageBitmap )
       if ('close' in data) {
         data.close();
@@ -661,6 +708,7 @@ const createImageWrapperView = _ => {
       if (canCreateImageBitmap(item.file)) {
         // let's scale the image in a worker
         const worker = createWorker(BitmapWorker);
+
         worker.post(
           {
             file: fileURL
@@ -672,7 +720,7 @@ const createImageWrapperView = _ => {
             // no bitmap returned, must be something wrong,
             // try the oldschool way
             if (!imageBitmap) {
-              loadPreviewFallback(item);
+              loadPreviewFallback();
               return;
             }
 
@@ -682,7 +730,7 @@ const createImageWrapperView = _ => {
         );
       } else {
         // create fallback preview
-        loadPreviewFallback(item);
+        loadPreviewFallback();
       }
     });
   };
@@ -815,7 +863,7 @@ var plugin$1 = fpAPI => {
       const item = query('GET_ITEM', id);
 
       // item could theoretically have been removed in the mean time
-      if (!item || !isFile(item.file)) {
+      if (!item || !isFile(item.file) || item.archived) {
         return;
       }
 
@@ -853,17 +901,17 @@ var plugin$1 = fpAPI => {
         return;
       }
 
-      let { imageWidth: width, imageHeight: height } = root.ref;
-
-      // no data!
-      if (!width || !height) {
-        return;
-      }
-
       let { id } = props;
 
       // get item
       const item = root.query('GET_ITEM', { id });
+      if (!item) return;
+
+      // no data!
+      let { imageWidth: width, imageHeight: height } = root.ref;
+      if (!width || !height) {
+        return;
+      }
 
       // orientation info
       const exif = item.getMetadata('exif') || {};
