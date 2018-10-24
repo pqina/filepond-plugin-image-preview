@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.0
+ * FilePondPluginImagePreview 3.1.1
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -483,7 +483,12 @@ const calculateAverageColor = image => {
   const width = (canvas.width = Math.ceil(image.width * scalar));
   const height = (canvas.height = Math.ceil(image.height * scalar));
   ctx.drawImage(image, 0, 0, width, height);
-  const data = ctx.getImageData(0, 0, width, height).data;
+  let data = null;
+  try {
+    data = ctx.getImageData(0, 0, width, height).data;
+  } catch (e) {
+    return null;
+  }
   const l = data.length;
 
   let r = 0;
@@ -505,6 +510,19 @@ const calculateAverageColor = image => {
 };
 
 const averageColor = (c, l) => Math.floor(Math.sqrt(c / (l / 4)));
+
+const loadImage = url =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      resolve(img);
+    };
+    img.onerror = e => {
+      reject(e);
+    };
+    img.src = url;
+  });
 
 const createImageWrapperView = _ => {
   // create overlay view
@@ -611,7 +629,7 @@ const createImageWrapperView = _ => {
    */
   const didCreatePreviewContainer = ({ root, props }) => {
     const { utils } = _;
-    const { createWorker, loadImage } = utils;
+    const { createWorker } = utils;
     const { id } = props;
 
     // we need to get the file data to determine the eventual image size

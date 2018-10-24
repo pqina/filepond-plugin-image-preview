@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.0
+ * FilePondPluginImagePreview 3.1.1
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -576,7 +576,12 @@
     var width = (canvas.width = Math.ceil(image.width * scalar));
     var height = (canvas.height = Math.ceil(image.height * scalar));
     ctx.drawImage(image, 0, 0, width, height);
-    var data = ctx.getImageData(0, 0, width, height).data;
+    var data = null;
+    try {
+      data = ctx.getImageData(0, 0, width, height).data;
+    } catch (e) {
+      return null;
+    }
     var l = data.length;
 
     var r = 0;
@@ -599,6 +604,20 @@
 
   var averageColor = function averageColor(c, l) {
     return Math.floor(Math.sqrt(c / (l / 4)));
+  };
+
+  var loadImage = function loadImage(url) {
+    return new Promise(function(resolve, reject) {
+      var img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = function() {
+        resolve(img);
+      };
+      img.onerror = function(e) {
+        reject(e);
+      };
+      img.src = url;
+    });
   };
 
   var createImageWrapperView = function createImageWrapperView(_) {
@@ -721,8 +740,7 @@
       var root = _ref5.root,
         props = _ref5.props;
       var utils = _.utils;
-      var createWorker = utils.createWorker,
-        loadImage = utils.loadImage;
+      var createWorker = utils.createWorker;
       var id = props.id;
 
       // we need to get the file data to determine the eventual image size
