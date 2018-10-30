@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.1
+ * FilePondPluginImagePreview 3.1.2
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -698,7 +698,11 @@ const createImageWrapperView = _ => {
       );
 
       // calculate average image color
-      const averageColor = calculateAverageColor(data);
+      const averageColor = root.query(
+        'GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR'
+      )
+        ? calculateAverageColor(data)
+        : null;
       item.setMetadata('color', averageColor);
 
       // data has been transferred to canvas ( if was ImageBitmap )
@@ -1046,7 +1050,10 @@ var plugin$1 = fpAPI => {
       imagePreviewMaxFileSize: [null, Type.INT],
 
       // Style of the transparancy indicator used behind images
-      imagePreviewTransparencyIndicator: [null, Type.STRING]
+      imagePreviewTransparencyIndicator: [null, Type.STRING],
+
+      // Enables or disables reading average image color
+      imagePreviewCalculateAverageImageColor: [false, Type.BOOLEAN]
     }
   };
 };
