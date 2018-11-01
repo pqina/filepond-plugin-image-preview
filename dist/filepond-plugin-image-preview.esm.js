@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.2
+ * FilePondPluginImagePreview 3.1.3
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -697,13 +697,13 @@ const createImageWrapperView = _ => {
         orientation
       );
 
-      // calculate average image color
+      // calculate average image color, disabled for now
       const averageColor = root.query(
         'GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR'
       )
         ? calculateAverageColor(data)
         : null;
-      item.setMetadata('color', averageColor);
+      item.setMetadata('color', averageColor, true);
 
       // data has been transferred to canvas ( if was ImageBitmap )
       if ('close' in data) {
