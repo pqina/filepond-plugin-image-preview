@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.3
+ * FilePondPluginImagePreview 3.1.4
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -396,20 +396,10 @@ const createImageOverlayView = fpAPI =>
  * Bitmap Worker
  */
 const BitmapWorker = function() {
-  // route messages
   self.onmessage = e => {
-    toBitmap(e.data.message, response => {
-      // imageBitmap is sent back as transferable
-      self.postMessage({ id: e.data.id, message: response }, [response]);
+    createImageBitmap(e.data.message.file).then(bitmap => {
+      self.postMessage({ id: e.data.id, message: bitmap }, [bitmap]);
     });
-  };
-
-  // resize image data
-  const toBitmap = (options, cb) => {
-    fetch(options.file)
-      .then(response => response.blob())
-      .then(blob => createImageBitmap(blob))
-      .then(imageBitmap => cb(imageBitmap));
   };
 };
 
@@ -733,7 +723,7 @@ const createImageWrapperView = _ => {
 
         worker.post(
           {
-            file: fileURL
+            file: item.file
           },
           imageBitmap => {
             // destroy worker

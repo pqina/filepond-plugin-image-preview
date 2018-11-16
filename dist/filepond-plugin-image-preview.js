@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.3
+ * FilePondPluginImagePreview 3.1.4
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -439,26 +439,10 @@
    * Bitmap Worker
    */
   var BitmapWorker = function BitmapWorker() {
-    // route messages
     self.onmessage = function(e) {
-      toBitmap(e.data.message, function(response) {
-        // imageBitmap is sent back as transferable
-        self.postMessage({ id: e.data.id, message: response }, [response]);
+      createImageBitmap(e.data.message.file).then(function(bitmap) {
+        self.postMessage({ id: e.data.id, message: bitmap }, [bitmap]);
       });
-    };
-
-    // resize image data
-    var toBitmap = function toBitmap(options, cb) {
-      fetch(options.file)
-        .then(function(response) {
-          return response.blob();
-        })
-        .then(function(blob) {
-          return createImageBitmap(blob);
-        })
-        .then(function(imageBitmap) {
-          return cb(imageBitmap);
-        });
     };
   };
 
@@ -849,7 +833,7 @@
 
           worker.post(
             {
-              file: fileURL
+              file: item.file
             },
             function(imageBitmap) {
               // destroy worker
