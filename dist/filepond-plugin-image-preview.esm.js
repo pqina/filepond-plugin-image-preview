@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.4
+ * FilePondPluginImagePreview 3.1.5
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -350,12 +350,16 @@ const definitions = `<radialGradient id="filepond--image-preview-radial-gradient
 </mask>`;
 
 const appendDefinitions = () => {
-  if (document.readyState === 'interactive') {
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    defs.style.cssText = 'position:absolute;width:0;height:0';
-    defs.innerHTML = definitions;
-    document.body.appendChild(defs);
-  }
+  if (
+    !document.body ||
+    document.querySelector('.filepond--image-preview-sprite')
+  )
+    return;
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  defs.setAttribute('class', 'filepond--image-preview-sprite');
+  defs.style.cssText = 'position:absolute;width:0;height:0';
+  defs.innerHTML = definitions;
+  document.body.appendChild(defs);
 };
 
 const hasNavigator = typeof navigator !== 'undefined';

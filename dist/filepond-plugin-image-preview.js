@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.4
+ * FilePondPluginImagePreview 3.1.5
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -390,12 +390,16 @@
     "<radialGradient id=\"filepond--image-preview-radial-gradient\" cx=\".5\" cy=\"1.25\" r=\"1.15\">\n<stop offset='50%' stop-color='#000000'/>\n<stop offset='56%' stop-color='#0a0a0a'/>\n<stop offset='63%' stop-color='#262626'/>\n<stop offset='69%' stop-color='#4f4f4f'/>\n<stop offset='75%' stop-color='#808080'/>\n<stop offset='81%' stop-color='#b1b1b1'/>\n<stop offset='88%' stop-color='#dadada'/>\n<stop offset='94%' stop-color='#f6f6f6'/>\n<stop offset='100%' stop-color='#ffffff'/>\n</radialGradient>\n\n<mask id=\"filepond--image-preview-masking\">\n<rect x=\"0\" y=\"0\" width=\"500\" height=\"200\" fill=\"url(#filepond--image-preview-radial-gradient)\"></rect>\n</mask>";
 
   var appendDefinitions = function appendDefinitions() {
-    if (document.readyState === 'interactive') {
-      var defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      defs.style.cssText = 'position:absolute;width:0;height:0';
-      defs.innerHTML = definitions;
-      document.body.appendChild(defs);
-    }
+    if (
+      !document.body ||
+      document.querySelector('.filepond--image-preview-sprite')
+    )
+      return;
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    defs.setAttribute('class', 'filepond--image-preview-sprite');
+    defs.style.cssText = 'position:absolute;width:0;height:0';
+    defs.innerHTML = definitions;
+    document.body.appendChild(defs);
   };
 
   var hasNavigator = typeof navigator !== 'undefined';
