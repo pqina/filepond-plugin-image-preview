@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.5
+ * FilePondPluginImagePreview 3.1.6
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -528,12 +528,11 @@ const createImageWrapperView = _ => {
   };
 
   // remove an image
-  let imageViewBin = [];
   const shiftImage = ({ root }) => {
     const image = root.ref.images.shift();
     image.opacity = 0;
     image.translateY = -15;
-    imageViewBin.push(image);
+    root.ref.imageViewBin.push(image);
   };
 
   const ImageView = createImageView(_);
@@ -789,6 +788,9 @@ const createImageWrapperView = _ => {
     // image view
     root.ref.images = [];
 
+    // image bin
+    root.ref.imageViewBin = [];
+
     // image overlays
     root.ref.overlayShadow = root.appendChildView(
       root.createChildView(overlay, {
@@ -838,12 +840,14 @@ const createImageWrapperView = _ => {
         }
 
         // views on death row
-        const viewsToRemove = imageViewBin.filter(
+        const viewsToRemove = root.ref.imageViewBin.filter(
           imageView => imageView.opacity === 0
         );
 
         // views to retain
-        imageViewBin = imageViewBin.filter(imageView => imageView.opacity > 0);
+        root.ref.imageViewBin = root.ref.imageViewBin.filter(
+          imageView => imageView.opacity > 0
+        );
 
         // remove these views
         viewsToRemove.forEach(imageView => removeImageView(root, imageView));

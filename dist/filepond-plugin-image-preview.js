@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.5
+ * FilePondPluginImagePreview 3.1.6
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -618,14 +618,13 @@
     };
 
     // remove an image
-    var imageViewBin = [];
     var shiftImage = function shiftImage(_ref) {
       var root = _ref.root;
 
       var image = root.ref.images.shift();
       image.opacity = 0;
       image.translateY = -15;
-      imageViewBin.push(image);
+      root.ref.imageViewBin.push(image);
     };
 
     var ImageView = createImageView(_);
@@ -909,6 +908,9 @@
       // image view
       root.ref.images = [];
 
+      // image bin
+      root.ref.imageViewBin = [];
+
       // image overlays
       root.ref.overlayShadow = root.appendChildView(
         root.createChildView(overlay, {
@@ -960,12 +962,14 @@
           }
 
           // views on death row
-          var viewsToRemove = imageViewBin.filter(function(imageView) {
+          var viewsToRemove = root.ref.imageViewBin.filter(function(imageView) {
             return imageView.opacity === 0;
           });
 
           // views to retain
-          imageViewBin = imageViewBin.filter(function(imageView) {
+          root.ref.imageViewBin = root.ref.imageViewBin.filter(function(
+            imageView
+          ) {
             return imageView.opacity > 0;
           });
 
