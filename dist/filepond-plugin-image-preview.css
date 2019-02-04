@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.6
+ * FilePondPluginImagePreview 4.0.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -63,6 +63,7 @@
   left: 0;
   top: 0;
   right: 0;
+  height: 100%;
   margin: 0;
   border-radius: 0.45em;
   overflow: hidden;
@@ -74,9 +75,12 @@
   left: 0;
   top: 0;
   z-index: 1;
-  display: block;
+  display: -ms-flexbox;
+  display: flex;
+  -ms-flex-align: center;
+  align-items: center;
+  height: 100%;
   width: 100%;
-  height: auto;
   pointer-events: none;
   -webkit-transform-origin: center center;
   transform-origin: center center;

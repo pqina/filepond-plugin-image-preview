@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.6
+ * FilePondPluginImagePreview 4.0.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -177,7 +177,10 @@ const createClipView = _ =>
     ignoreRect: true,
     mixins: {
       apis: ['crop', 'width', 'height'],
-      styles: ['width', 'height']
+      styles: ['width', 'height', 'opacity'],
+      animations: {
+        opacity: { type: 'tween', duration: 250 }
+      }
     },
     create: ({ root, props }) => {
       root.ref.image = root.appendChildView(
@@ -203,7 +206,7 @@ const createClipView = _ =>
         root.element.dataset.transparencyIndicator = 'color';
       }
     },
-    write: ({ root, props }) => {
+    write: ({ root, props, shouldOptimize }) => {
       const { crop, width, height } = props;
 
       root.ref.image.crop = crop;
@@ -249,6 +252,18 @@ const createClipView = _ =>
 
       const imageView = root.ref.image;
 
+      // don't update clip layout
+      if (shouldOptimize) {
+        imageView.originX = null;
+        imageView.originY = null;
+        imageView.translateX = null;
+        imageView.translateY = null;
+        imageView.rotateZ = null;
+        imageView.scaleX = null;
+        imageView.scaleY = null;
+        return;
+      }
+
       imageView.originX = origin.x;
       imageView.originY = origin.y;
       imageView.translateX = translation.x;
@@ -271,7 +286,7 @@ const createImageView = _ =>
         scaleX: IMAGE_SCALE_SPRING_PROPS,
         scaleY: IMAGE_SCALE_SPRING_PROPS,
         translateY: IMAGE_SCALE_SPRING_PROPS,
-        opacity: { type: 'tween', duration: 500 }
+        opacity: { type: 'tween', duration: 400 }
       }
     },
     create: ({ root, props }) => {
@@ -282,12 +297,18 @@ const createImageView = _ =>
         })
       );
     },
-    write: ({ root, props }) => {
+    write: ({ root, props, shouldOptimize }) => {
       const { clip } = root.ref;
 
       const { crop, image } = props;
 
       clip.crop = crop;
+
+      // don't update clip layout
+      clip.opacity = shouldOptimize ? 0 : 1;
+      if (shouldOptimize) {
+        return;
+      }
 
       // calculate scaled preview image size
       const imageAspectRatio = image.height / image.width;
@@ -295,7 +316,7 @@ const createImageView = _ =>
 
       // calculate container size
       const containerWidth = root.rect.inner.width;
-      const previewWidth = containerWidth;
+      const containerHeight = root.rect.inner.height;
 
       let fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
       const minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
@@ -319,9 +340,14 @@ const createImageView = _ =>
             );
 
       let clipWidth = clipHeight / aspectRatio;
-      if (clipWidth > previewWidth) {
-        clipWidth = previewWidth;
+      if (clipWidth > containerWidth) {
+        clipWidth = containerWidth;
         clipHeight = clipWidth * aspectRatio;
+      }
+
+      if (clipHeight > containerHeight) {
+        clipHeight = containerHeight;
+        clipWidth = containerHeight / aspectRatio;
       }
 
       clip.width = clipWidth;
@@ -657,20 +683,23 @@ const createImageWrapperView = _ => {
       // scale canvas based on pixel density
       const pixelDensityFactor = window.devicePixelRatio;
 
-      // the max height of the preview container
-      const fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
-      const minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
-      const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
-
       // calculate scaled preview image size
       const previewImageRatio = height / width;
 
       // calculate image preview height and width
-      const imageHeight =
-        fixedPreviewHeight !== null
-          ? fixedPreviewHeight
-          : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
-      const imageWidth = imageHeight / previewImageRatio;
+      const previewContainerWidth = root.rect.element.width;
+      const previewContainerHeight = root.rect.element.height;
+
+      let imageWidth = 0;
+      let imageHeight = 0;
+
+      if (previewImageRatio > 1) {
+        imageWidth = previewContainerWidth;
+        imageHeight = imageWidth * previewImageRatio;
+      } else {
+        imageHeight = previewContainerHeight;
+        imageWidth = imageHeight / previewImageRatio;
+      }
 
       // we want as much pixels to work with as possible,
       // this multiplies the minimum image resolution
@@ -818,6 +847,7 @@ const createImageWrapperView = _ => {
     name: 'image-preview-wrapper',
     create,
     styles: ['height'],
+    apis: ['height'],
     write: _.utils.createRoute(
       {
         // image preview stated
@@ -834,11 +864,6 @@ const createImageWrapperView = _ => {
         DID_REVERT_ITEM_PROCESSING: restoreOverlay
       },
       ({ root }) => {
-        const panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
-        if (panelAspectRatio) {
-          root.height = panelAspectRatio * root.rect.width;
-        }
-
         // views on death row
         const viewsToRemove = root.ref.imageViewBin.filter(
           imageView => imageView.opacity === 0
@@ -883,17 +908,13 @@ var plugin$1 = fpAPI => {
       const item = query('GET_ITEM', id);
 
       // item could theoretically have been removed in the mean time
-      if (!item || !isFile(item.file) || item.archived) {
-        return;
-      }
+      if (!item || !isFile(item.file) || item.archived) return;
 
       // get the file object
       const file = item.file;
 
       // exit if this is not an image
-      if (!isPreviewableImage(file)) {
-        return;
-      }
+      if (!isPreviewableImage(file)) return;
 
       // exit if image size is too high and no createImageBitmap support
       // this would simply bring the browser to its knees and that is not what we want
@@ -903,23 +924,32 @@ var plugin$1 = fpAPI => {
         !supportsCreateImageBitmap &&
         maxPreviewFileSize &&
         file.size > maxPreviewFileSize
-      ) {
+      )
         return;
-      }
 
       // set preview view
       root.ref.imagePreview = view.appendChildView(
         view.createChildView(imagePreviewView, { id })
       );
 
+      // update height if is fixed
+      const fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+      if (fixedPreviewHeight) {
+        root.dispatch('DID_UPDATE_PANEL_HEIGHT', {
+          id: item.id,
+          height: fixedPreviewHeight
+        });
+      }
+
       // now ready
-      root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id });
+      const queue =
+        !supportsCreateImageBitmap &&
+        file.size > query('GET_IMAGE_PREVIEW_MAX_INSTANT_PREVIEW_FILE_SIZE');
+      root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id }, queue);
     };
 
-    const scaleItemBackground = (root, props) => {
-      if (!root.ref.imagePreview) {
-        return;
-      }
+    const rescaleItem = (root, props) => {
+      if (!root.ref.imagePreview) return;
 
       let { id } = props;
 
@@ -927,87 +957,67 @@ var plugin$1 = fpAPI => {
       const item = root.query('GET_ITEM', { id });
       if (!item) return;
 
+      // if is fixed height or panel has aspect ratio, exit here, height has already been defined
+      const panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
+      const itemPanelAspectRatio = root.query('GET_ITEM_PANEL_ASPECT_RATIO');
+      const fixedHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+      if (panelAspectRatio || itemPanelAspectRatio || fixedHeight) return;
+
       // no data!
-      let { imageWidth: width, imageHeight: height } = root.ref;
-      if (!width || !height) {
-        return;
-      }
+      let { imageWidth, imageHeight } = root.ref;
+      if (!imageWidth || !imageHeight) return;
+
+      // get height min and max
+      const minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
+      const maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
       // orientation info
       const exif = item.getMetadata('exif') || {};
       const orientation = exif.orientation || -1;
 
       // get width and height from action, and swap of orientation is incorrect
-      if (orientation >= 5 && orientation <= 8) {
-        [width, height] = [height, width];
-      }
-
-      // stylePanelAspectRatio
-      const panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
-      const allowMultiple = root.query('GET_ALLOW_MULTIPLE');
-
-      // we need the item to get to the crop size
-      const crop = item.getMetadata('crop') || {
-        center: {
-          x: 0.5,
-          y: 0.5
-        },
-        flip: {
-          horizontal: false,
-          vertical: false
-        },
-        rotation: 0,
-        zoom: 1,
-        aspectRatio: height / width
-      };
-
-      // set image aspect ratio as fallback
-      const shouldForcePreviewSize = !allowMultiple && panelAspectRatio;
-      const previewAspectRatio = shouldForcePreviewSize
-        ? panelAspectRatio
-        : crop.aspectRatio || height / width;
-
-      // get height min and max
-      let fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
-      let minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
-      let maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
-
-      // force to panel aspect ratio
-      if (shouldForcePreviewSize) {
-        fixedPreviewHeight = root.rect.element.width * panelAspectRatio;
-      }
+      if (orientation >= 5 && orientation <= 8)
+        [imageWidth, imageHeight] = [imageHeight, imageWidth];
 
       // scale up width and height when we're dealing with an SVG
       if (!isBitmap(item.file)) {
-        const scalar = 2048 / width;
-        width *= scalar;
-        height *= scalar;
+        const scalar = 2048 / imageWidth;
+        imageWidth *= scalar;
+        imageHeight *= scalar;
       }
 
-      // const crop width
-      height =
-        fixedPreviewHeight !== null
-          ? fixedPreviewHeight
-          : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
+      // image aspect ratio
+      const imageAspectRatio = imageHeight / imageWidth;
 
-      width = height / previewAspectRatio;
-      if (width > root.rect.element.width || shouldForcePreviewSize) {
-        width = root.rect.element.width;
-        height = width * previewAspectRatio;
-      }
+      // we need the item to get to the crop size
+      const previewAspectRatio =
+        (item.getMetadata('crop') || {}).aspectRatio || imageAspectRatio;
 
-      // set height
-      root.ref.imagePreview.element.style.cssText = `height:${Math.round(
-        height
-      )}px`;
+      // preview height range
+      let previewHeightMax = Math.max(
+        minPreviewHeight,
+        Math.min(imageHeight, maxPreviewHeight)
+      );
+      const itemWidth = root.rect.element.width;
+      const previewHeight = Math.min(
+        itemWidth * previewAspectRatio,
+        previewHeightMax
+      );
+
+      // request update to panel height
+      root.dispatch('DID_UPDATE_PANEL_HEIGHT', {
+        id: item.id,
+        height: previewHeight
+      });
+    };
+
+    const didResizeView = ({ root, props }) => {
+      rescaleItem(root, props);
     };
 
     const didUpdateItemMetadata = ({ root, props, action }) => {
-      if (action.change.key !== 'crop') {
-        return;
-      }
-
-      scaleItemBackground(root, props);
+      if (action.change.key !== 'crop') return;
+      rescaleItem(root, props);
     };
 
     const didCalculatePreviewSize = ({ root, props, action }) => {
@@ -1016,12 +1026,14 @@ var plugin$1 = fpAPI => {
       root.ref.imageHeight = action.height;
 
       // let's scale the preview pane
-      scaleItemBackground(root, props);
+      rescaleItem(root, props);
     };
 
     // start writing
     view.registerWriter(
       createRoute({
+        DID_RESIZE_ROOT: didResizeView,
+        DID_STOP_RESIZE: didResizeView,
         DID_LOAD_ITEM: didLoadItem,
         DID_IMAGE_PREVIEW_CALCULATE_SIZE: didCalculatePreviewSize,
         DID_UPDATE_ITEM_METADATA: didUpdateItemMetadata
@@ -1047,6 +1059,9 @@ var plugin$1 = fpAPI => {
       // Max size of preview file for when createImageBitmap is not supported
       imagePreviewMaxFileSize: [null, Type.INT],
 
+      // Max size of preview file that we allow to try to instant preview if createImageBitmap is not supported, else image is queued for loading
+      imagePreviewMaxInstantPreviewFileSize: [1000000, Type.INT],
+
       // Style of the transparancy indicator used behind images
       imagePreviewTransparencyIndicator: [null, Type.STRING],
 
@@ -1059,7 +1074,7 @@ var plugin$1 = fpAPI => {
 const isBrowser =
   typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
-if (isBrowser && document) {
+if (isBrowser) {
   document.dispatchEvent(
     new CustomEvent('FilePond:pluginloaded', { detail: plugin$1 })
   );

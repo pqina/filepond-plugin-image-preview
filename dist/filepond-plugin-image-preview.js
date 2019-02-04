@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 3.1.6
+ * FilePondPluginImagePreview 4.0.0
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -216,7 +216,10 @@
       ignoreRect: true,
       mixins: {
         apis: ['crop', 'width', 'height'],
-        styles: ['width', 'height']
+        styles: ['width', 'height', 'opacity'],
+        animations: {
+          opacity: { type: 'tween', duration: 250 }
+        }
       },
       create: function create(_ref4) {
         var root = _ref4.root,
@@ -247,7 +250,8 @@
       },
       write: function write(_ref5) {
         var root = _ref5.root,
-          props = _ref5.props;
+          props = _ref5.props,
+          shouldOptimize = _ref5.shouldOptimize;
         var crop = props.crop,
           width = props.width,
           height = props.height;
@@ -295,6 +299,18 @@
 
         var imageView = root.ref.image;
 
+        // don't update clip layout
+        if (shouldOptimize) {
+          imageView.originX = null;
+          imageView.originY = null;
+          imageView.translateX = null;
+          imageView.translateY = null;
+          imageView.rotateZ = null;
+          imageView.scaleX = null;
+          imageView.scaleY = null;
+          return;
+        }
+
         imageView.originX = origin.x;
         imageView.originY = origin.y;
         imageView.translateX = translation.x;
@@ -318,7 +334,7 @@
           scaleX: IMAGE_SCALE_SPRING_PROPS,
           scaleY: IMAGE_SCALE_SPRING_PROPS,
           translateY: IMAGE_SCALE_SPRING_PROPS,
-          opacity: { type: 'tween', duration: 500 }
+          opacity: { type: 'tween', duration: 400 }
         }
       },
       create: function create(_ref6) {
@@ -334,12 +350,19 @@
       },
       write: function write(_ref7) {
         var root = _ref7.root,
-          props = _ref7.props;
+          props = _ref7.props,
+          shouldOptimize = _ref7.shouldOptimize;
         var clip = root.ref.clip;
         var crop = props.crop,
           image = props.image;
 
         clip.crop = crop;
+
+        // don't update clip layout
+        clip.opacity = shouldOptimize ? 0 : 1;
+        if (shouldOptimize) {
+          return;
+        }
 
         // calculate scaled preview image size
         var imageAspectRatio = image.height / image.width;
@@ -347,7 +370,7 @@
 
         // calculate container size
         var containerWidth = root.rect.inner.width;
-        var previewWidth = containerWidth;
+        var containerHeight = root.rect.inner.height;
 
         var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
         var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
@@ -371,9 +394,14 @@
               );
 
         var clipWidth = clipHeight / aspectRatio;
-        if (clipWidth > previewWidth) {
-          clipWidth = previewWidth;
+        if (clipWidth > containerWidth) {
+          clipWidth = containerWidth;
           clipHeight = clipWidth * aspectRatio;
+        }
+
+        if (clipHeight > containerHeight) {
+          clipHeight = containerHeight;
+          clipWidth = containerHeight / aspectRatio;
         }
 
         clip.width = clipWidth;
@@ -767,20 +795,23 @@
         // scale canvas based on pixel density
         var pixelDensityFactor = window.devicePixelRatio;
 
-        // the max height of the preview container
-        var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
-        var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
-        var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
-
         // calculate scaled preview image size
         var previewImageRatio = height / width;
 
         // calculate image preview height and width
-        var imageHeight =
-          fixedPreviewHeight !== null
-            ? fixedPreviewHeight
-            : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
-        var imageWidth = imageHeight / previewImageRatio;
+        var previewContainerWidth = root.rect.element.width;
+        var previewContainerHeight = root.rect.element.height;
+
+        var imageWidth = 0;
+        var imageHeight = 0;
+
+        if (previewImageRatio > 1) {
+          imageWidth = previewContainerWidth;
+          imageHeight = imageWidth * previewImageRatio;
+        } else {
+          imageHeight = previewContainerHeight;
+          imageWidth = imageHeight / previewImageRatio;
+        }
 
         // we want as much pixels to work with as possible,
         // this multiplies the minimum image resolution
@@ -938,6 +969,7 @@
       name: 'image-preview-wrapper',
       create: create,
       styles: ['height'],
+      apis: ['height'],
       write: _.utils.createRoute(
         {
           // image preview stated
@@ -955,11 +987,6 @@
         },
         function(_ref12) {
           var root = _ref12.root;
-
-          var panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
-          if (panelAspectRatio) {
-            root.height = panelAspectRatio * root.rect.width;
-          }
 
           // views on death row
           var viewsToRemove = root.ref.imageViewBin.filter(function(imageView) {
@@ -1019,17 +1046,13 @@
         var item = query('GET_ITEM', id);
 
         // item could theoretically have been removed in the mean time
-        if (!item || !isFile(item.file) || item.archived) {
-          return;
-        }
+        if (!item || !isFile(item.file) || item.archived) return;
 
         // get the file object
         var file = item.file;
 
         // exit if this is not an image
-        if (!isPreviewableImage(file)) {
-          return;
-        }
+        if (!isPreviewableImage(file)) return;
 
         // exit if image size is too high and no createImageBitmap support
         // this would simply bring the browser to its knees and that is not what we want
@@ -1039,23 +1062,32 @@
           !supportsCreateImageBitmap &&
           maxPreviewFileSize &&
           file.size > maxPreviewFileSize
-        ) {
+        )
           return;
-        }
 
         // set preview view
         root.ref.imagePreview = view.appendChildView(
           view.createChildView(imagePreviewView, { id: id })
         );
 
+        // update height if is fixed
+        var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+        if (fixedPreviewHeight) {
+          root.dispatch('DID_UPDATE_PANEL_HEIGHT', {
+            id: item.id,
+            height: fixedPreviewHeight
+          });
+        }
+
         // now ready
-        root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id: id });
+        var queue =
+          !supportsCreateImageBitmap &&
+          file.size > query('GET_IMAGE_PREVIEW_MAX_INSTANT_PREVIEW_FILE_SIZE');
+        root.dispatch('DID_IMAGE_PREVIEW_CONTAINER_CREATE', { id: id }, queue);
       };
 
-      var scaleItemBackground = function scaleItemBackground(root, props) {
-        if (!root.ref.imagePreview) {
-          return;
-        }
+      var rescaleItem = function rescaleItem(root, props) {
+        if (!root.ref.imagePreview) return;
 
         var id = props.id;
 
@@ -1064,14 +1096,22 @@
         var item = root.query('GET_ITEM', { id: id });
         if (!item) return;
 
+        // if is fixed height or panel has aspect ratio, exit here, height has already been defined
+        var panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
+        var itemPanelAspectRatio = root.query('GET_ITEM_PANEL_ASPECT_RATIO');
+        var fixedHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
+        if (panelAspectRatio || itemPanelAspectRatio || fixedHeight) return;
+
         // no data!
         var _root$ref = root.ref,
-          width = _root$ref.imageWidth,
-          height = _root$ref.imageHeight;
+          imageWidth = _root$ref.imageWidth,
+          imageHeight = _root$ref.imageHeight;
 
-        if (!width || !height) {
-          return;
-        }
+        if (!imageWidth || !imageHeight) return;
+
+        // get height min and max
+        var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
+        var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
 
         // orientation info
         var exif = item.getMetadata('exif') || {};
@@ -1079,98 +1119,75 @@
 
         // get width and height from action, and swap of orientation is incorrect
         if (orientation >= 5 && orientation <= 8) {
-          var _ref2 = [height, width];
-          width = _ref2[0];
-          height = _ref2[1];
+          var _ref2 = [imageHeight, imageWidth];
+          imageWidth = _ref2[0];
+          imageHeight = _ref2[1];
+        } // scale up width and height when we're dealing with an SVG
+        if (!isBitmap(item.file)) {
+          var scalar = 2048 / imageWidth;
+          imageWidth *= scalar;
+          imageHeight *= scalar;
         }
 
-        // stylePanelAspectRatio
-        var panelAspectRatio = root.query('GET_PANEL_ASPECT_RATIO');
-        var allowMultiple = root.query('GET_ALLOW_MULTIPLE');
+        // image aspect ratio
+        var imageAspectRatio = imageHeight / imageWidth;
 
         // we need the item to get to the crop size
-        var crop = item.getMetadata('crop') || {
-          center: {
-            x: 0.5,
-            y: 0.5
-          },
-          flip: {
-            horizontal: false,
-            vertical: false
-          },
-          rotation: 0,
-          zoom: 1,
-          aspectRatio: height / width
-        };
+        var previewAspectRatio =
+          (item.getMetadata('crop') || {}).aspectRatio || imageAspectRatio;
 
-        // set image aspect ratio as fallback
-        var shouldForcePreviewSize = !allowMultiple && panelAspectRatio;
-        var previewAspectRatio = shouldForcePreviewSize
-          ? panelAspectRatio
-          : crop.aspectRatio || height / width;
+        // preview height range
+        var previewHeightMax = Math.max(
+          minPreviewHeight,
+          Math.min(imageHeight, maxPreviewHeight)
+        );
+        var itemWidth = root.rect.element.width;
+        var previewHeight = Math.min(
+          itemWidth * previewAspectRatio,
+          previewHeightMax
+        );
 
-        // get height min and max
-        var fixedPreviewHeight = root.query('GET_IMAGE_PREVIEW_HEIGHT');
-        var minPreviewHeight = root.query('GET_IMAGE_PREVIEW_MIN_HEIGHT');
-        var maxPreviewHeight = root.query('GET_IMAGE_PREVIEW_MAX_HEIGHT');
-
-        // force to panel aspect ratio
-        if (shouldForcePreviewSize) {
-          fixedPreviewHeight = root.rect.element.width * panelAspectRatio;
-        }
-
-        // scale up width and height when we're dealing with an SVG
-        if (!isBitmap(item.file)) {
-          var scalar = 2048 / width;
-          width *= scalar;
-          height *= scalar;
-        }
-
-        // const crop width
-        height =
-          fixedPreviewHeight !== null
-            ? fixedPreviewHeight
-            : Math.max(minPreviewHeight, Math.min(height, maxPreviewHeight));
-
-        width = height / previewAspectRatio;
-        if (width > root.rect.element.width || shouldForcePreviewSize) {
-          width = root.rect.element.width;
-          height = width * previewAspectRatio;
-        }
-
-        // set height
-        root.ref.imagePreview.element.style.cssText =
-          'height:' + Math.round(height) + 'px';
+        // request update to panel height
+        root.dispatch('DID_UPDATE_PANEL_HEIGHT', {
+          id: item.id,
+          height: previewHeight
+        });
       };
 
-      var didUpdateItemMetadata = function didUpdateItemMetadata(_ref3) {
+      var didResizeView = function didResizeView(_ref3) {
         var root = _ref3.root,
-          props = _ref3.props,
-          action = _ref3.action;
+          props = _ref3.props;
 
-        if (action.change.key !== 'crop') {
-          return;
-        }
-
-        scaleItemBackground(root, props);
+        rescaleItem(root, props);
       };
 
-      var didCalculatePreviewSize = function didCalculatePreviewSize(_ref4) {
+      var didUpdateItemMetadata = function didUpdateItemMetadata(_ref4) {
         var root = _ref4.root,
           props = _ref4.props,
           action = _ref4.action;
+
+        if (action.change.key !== 'crop') return;
+        rescaleItem(root, props);
+      };
+
+      var didCalculatePreviewSize = function didCalculatePreviewSize(_ref5) {
+        var root = _ref5.root,
+          props = _ref5.props,
+          action = _ref5.action;
 
         // remember dimensions
         root.ref.imageWidth = action.width;
         root.ref.imageHeight = action.height;
 
         // let's scale the preview pane
-        scaleItemBackground(root, props);
+        rescaleItem(root, props);
       };
 
       // start writing
       view.registerWriter(
         createRoute({
+          DID_RESIZE_ROOT: didResizeView,
+          DID_STOP_RESIZE: didResizeView,
           DID_LOAD_ITEM: didLoadItem,
           DID_IMAGE_PREVIEW_CALCULATE_SIZE: didCalculatePreviewSize,
           DID_UPDATE_ITEM_METADATA: didUpdateItemMetadata
@@ -1196,6 +1213,9 @@
         // Max size of preview file for when createImageBitmap is not supported
         imagePreviewMaxFileSize: [null, Type.INT],
 
+        // Max size of preview file that we allow to try to instant preview if createImageBitmap is not supported, else image is queued for loading
+        imagePreviewMaxInstantPreviewFileSize: [1000000, Type.INT],
+
         // Style of the transparancy indicator used behind images
         imagePreviewTransparencyIndicator: [null, Type.STRING],
 
@@ -1208,7 +1228,7 @@
   var isBrowser =
     typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
-  if (isBrowser && document) {
+  if (isBrowser) {
     document.dispatchEvent(
       new CustomEvent('FilePond:pluginloaded', { detail: plugin$1 })
     );
