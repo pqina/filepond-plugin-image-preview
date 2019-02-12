@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 4.0.1
+ * FilePondPluginImagePreview 4.0.2
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -415,7 +415,9 @@
    * Turns out this also helps Safari to render the gradient on time
    */
   var definitions =
-    "<radialGradient id=\"filepond--image-preview-radial-gradient\" cx=\".5\" cy=\"1.25\" r=\"1.15\">\n<stop offset='50%' stop-color='#000000'/>\n<stop offset='56%' stop-color='#0a0a0a'/>\n<stop offset='63%' stop-color='#262626'/>\n<stop offset='69%' stop-color='#4f4f4f'/>\n<stop offset='75%' stop-color='#808080'/>\n<stop offset='81%' stop-color='#b1b1b1'/>\n<stop offset='88%' stop-color='#dadada'/>\n<stop offset='94%' stop-color='#f6f6f6'/>\n<stop offset='100%' stop-color='#ffffff'/>\n</radialGradient>\n\n<mask id=\"filepond--image-preview-masking\">\n<rect x=\"0\" y=\"0\" width=\"500\" height=\"200\" fill=\"url(#filepond--image-preview-radial-gradient)\"></rect>\n</mask>";
+    "<radialGradient id=\"filepond--image-preview-radial-gradient\" cx=\".5\" cy=\"1.25\" r=\"1.15\">\n<stop offset='50%' stop-color='#000000'/>\n<stop offset='56%' stop-color='#0a0a0a'/>\n<stop offset='63%' stop-color='#262626'/>\n<stop offset='69%' stop-color='#4f4f4f'/>\n<stop offset='75%' stop-color='#808080'/>\n<stop offset='81%' stop-color='#b1b1b1'/>\n<stop offset='88%' stop-color='#dadada'/>\n<stop offset='94%' stop-color='#f6f6f6'/>\n<stop offset='100%' stop-color='#ffffff'/>\n</radialGradient>\n\n<mask id=\"filepond--image-preview-masking\">\n<rect x=\"0\" y=\"0\" width=\"500\" height=\"200\" fill=\"url(__URL__#filepond--image-preview-radial-gradient)\"></rect>\n</mask>";
+
+  var baseURL = '';
 
   var appendDefinitions = function appendDefinitions() {
     if (
@@ -423,10 +425,11 @@
       document.querySelector('.filepond--image-preview-sprite')
     )
       return;
+    baseURL = window.location.href.replace(window.location.hash, '');
     var defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     defs.setAttribute('class', 'filepond--image-preview-sprite');
     defs.style.cssText = 'position:absolute;width:0;height:0';
-    defs.innerHTML = definitions;
+    defs.innerHTML = definitions.replace(/__URL__/, baseURL);
     document.body.appendChild(defs);
   };
 
@@ -456,7 +459,9 @@
         root.element.innerHTML =
           '<svg width="500" height="200" viewBox="0 0 500 200" preserveAspectRatio="none">\n                ' +
           (isEdgeOrIE ? '<defs>' + definitions + '</defs>' : '') +
-          '\n                <rect x="0" width="500" height="200" fill="currentColor" mask="url(#filepond--image-preview-masking)"></rect>\n            </svg>\n            ';
+          '\n                <rect x="0" width="500" height="200" fill="currentColor" mask="url(' +
+          baseURL +
+          '#filepond--image-preview-masking)"></rect>\n            </svg>\n            ';
       },
       mixins: {
         styles: ['opacity'],
@@ -754,6 +759,30 @@
     var didCreatePreviewContainer = function didCreatePreviewContainer(_ref5) {
       var root = _ref5.root,
         props = _ref5.props;
+      var id = props.id;
+
+      // we need to get the file data to determine the eventual image size
+
+      var item = root.query('GET_ITEM', id);
+      if (!item) return;
+
+      // get url to file (we'll revoke it later on when done)
+      var fileURL = URL.createObjectURL(item.file);
+
+      // determine image size of this item
+      getImageSize(fileURL, function(width, height) {
+        // we can now scale the panel to the final size
+        root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
+          id: id,
+          width: width,
+          height: height
+        });
+      });
+    };
+
+    var drawPreview = function drawPreview(_ref6) {
+      var root = _ref6.root,
+        props = _ref6.props;
       var utils = _.utils;
       var createWorker = utils.createWorker;
       var id = props.id;
@@ -787,9 +816,9 @@
           height = data.height;
 
         if (orientation >= 5 && orientation <= 8) {
-          var _ref6 = [height, width];
-          width = _ref6[0];
-          height = _ref6[1];
+          var _ref7 = [height, width];
+          width = _ref7[0];
+          height = _ref7[1];
         }
 
         // scale canvas based on pixel density
@@ -804,6 +833,9 @@
 
         var imageWidth = 0;
         var imageHeight = 0;
+
+        imageWidth = previewContainerWidth;
+        imageHeight = imageWidth * previewImageRatio;
 
         if (previewImageRatio > 1) {
           imageWidth = previewContainerWidth;
@@ -851,51 +883,41 @@
         pushImage({ root: root, props: props });
       };
 
-      // determine image size of this item
-      getImageSize(fileURL, function(width, height) {
-        // we can now scale the panel to the final size
-        root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
-          id: id,
-          width: width,
-          height: height
-        });
+      // if we support scaling using createImageBitmap we use a worker
+      if (canCreateImageBitmap(item.file)) {
+        // let's scale the image in a worker
+        var worker = createWorker(BitmapWorker);
 
-        // if we support scaling using createImageBitmap we use a worker
-        if (canCreateImageBitmap(item.file)) {
-          // let's scale the image in a worker
-          var worker = createWorker(BitmapWorker);
+        worker.post(
+          {
+            file: item.file
+          },
+          function(imageBitmap) {
+            // destroy worker
+            worker.terminate();
 
-          worker.post(
-            {
-              file: item.file
-            },
-            function(imageBitmap) {
-              // destroy worker
-              worker.terminate();
-
-              // no bitmap returned, must be something wrong,
-              // try the oldschool way
-              if (!imageBitmap) {
-                loadPreviewFallback();
-                return;
-              }
-
-              // yay we got our bitmap, let's continue showing the preview
-              previewImageLoaded(imageBitmap);
+            // no bitmap returned, must be something wrong,
+            // try the oldschool way
+            if (!imageBitmap) {
+              loadPreviewFallback();
+              return;
             }
-          );
-        } else {
-          // create fallback preview
-          loadPreviewFallback();
-        }
-      });
+
+            // yay we got our bitmap, let's continue showing the preview
+            previewImageLoaded(imageBitmap);
+          }
+        );
+      } else {
+        // create fallback preview
+        loadPreviewFallback();
+      }
     };
 
     /**
      * Write handler for when the preview image is ready to be animated
      */
-    var didDrawPreview = function didDrawPreview(_ref7) {
-      var root = _ref7.root;
+    var didDrawPreview = function didDrawPreview(_ref8) {
+      var root = _ref8.root;
 
       // get last added image
       var image = root.ref.images[root.ref.images.length - 1];
@@ -908,23 +930,23 @@
     /**
      * Write handler for when the preview has been loaded
      */
-    var restoreOverlay = function restoreOverlay(_ref8) {
-      var root = _ref8.root;
+    var restoreOverlay = function restoreOverlay(_ref9) {
+      var root = _ref9.root;
 
       root.ref.overlayShadow.opacity = 1;
       root.ref.overlayError.opacity = 0;
       root.ref.overlaySuccess.opacity = 0;
     };
 
-    var didThrowError = function didThrowError(_ref9) {
-      var root = _ref9.root;
+    var didThrowError = function didThrowError(_ref10) {
+      var root = _ref10.root;
 
       root.ref.overlayShadow.opacity = 0.25;
       root.ref.overlayError.opacity = 1;
     };
 
-    var didCompleteProcessing = function didCompleteProcessing(_ref10) {
-      var root = _ref10.root;
+    var didCompleteProcessing = function didCompleteProcessing(_ref11) {
+      var root = _ref11.root;
 
       root.ref.overlayShadow.opacity = 0.25;
       root.ref.overlaySuccess.opacity = 1;
@@ -933,8 +955,8 @@
     /**
      * Constructor
      */
-    var create = function create(_ref11) {
-      var root = _ref11.root;
+    var create = function create(_ref12) {
+      var root = _ref12.root;
 
       // image view
       root.ref.images = [];
@@ -975,6 +997,7 @@
           // image preview stated
           DID_IMAGE_PREVIEW_DRAW: didDrawPreview,
           DID_IMAGE_PREVIEW_CONTAINER_CREATE: didCreatePreviewContainer,
+          DID_FINISH_CALCULATE_PREVIEWSIZE: drawPreview,
           DID_UPDATE_ITEM_METADATA: didUpdateItemMetadata,
 
           // file states
@@ -985,8 +1008,8 @@
           DID_START_ITEM_PROCESSING: restoreOverlay,
           DID_REVERT_ITEM_PROCESSING: restoreOverlay
         },
-        function(_ref12) {
-          var root = _ref12.root;
+        function(_ref13) {
+          var root = _ref13.root;
 
           // views on death row
           var viewsToRemove = root.ref.imageViewBin.filter(function(imageView) {
@@ -1181,6 +1204,11 @@
 
         // let's scale the preview pane
         rescaleItem(root, props);
+
+        // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
+        requestAnimationFrame(function() {
+          root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE');
+        });
       };
 
       // start writing

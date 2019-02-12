@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 4.0.1
+ * FilePondPluginImagePreview 4.0.2
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -372,8 +372,10 @@ const definitions = `<radialGradient id="filepond--image-preview-radial-gradient
 </radialGradient>
 
 <mask id="filepond--image-preview-masking">
-<rect x="0" y="0" width="500" height="200" fill="url(#filepond--image-preview-radial-gradient)"></rect>
+<rect x="0" y="0" width="500" height="200" fill="url(__URL__#filepond--image-preview-radial-gradient)"></rect>
 </mask>`;
+
+let baseURL = '';
 
 const appendDefinitions = () => {
   if (
@@ -381,10 +383,11 @@ const appendDefinitions = () => {
     document.querySelector('.filepond--image-preview-sprite')
   )
     return;
+  baseURL = window.location.href.replace(window.location.hash, '');
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   defs.setAttribute('class', 'filepond--image-preview-sprite');
   defs.style.cssText = 'position:absolute;width:0;height:0';
-  defs.innerHTML = definitions;
+  defs.innerHTML = definitions.replace(/__URL__/, baseURL);
   document.body.appendChild(defs);
 };
 
@@ -410,7 +413,7 @@ const createImageOverlayView = fpAPI =>
       );
       root.element.innerHTML = `<svg width="500" height="200" viewBox="0 0 500 200" preserveAspectRatio="none">
                 ${isEdgeOrIE ? `<defs>${definitions}</defs>` : ''}
-                <rect x="0" width="500" height="200" fill="currentColor" mask="url(#filepond--image-preview-masking)"></rect>
+                <rect x="0" width="500" height="200" fill="currentColor" mask="url(${baseURL}#filepond--image-preview-masking)"></rect>
             </svg>
             `;
     },
@@ -647,6 +650,27 @@ const createImageWrapperView = _ => {
    * Write handler for when preview container has been created
    */
   const didCreatePreviewContainer = ({ root, props }) => {
+    const { id } = props;
+
+    // we need to get the file data to determine the eventual image size
+    const item = root.query('GET_ITEM', id);
+    if (!item) return;
+
+    // get url to file (we'll revoke it later on when done)
+    const fileURL = URL.createObjectURL(item.file);
+
+    // determine image size of this item
+    getImageSize(fileURL, (width, height) => {
+      // we can now scale the panel to the final size
+      root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
+        id,
+        width,
+        height
+      });
+    });
+  };
+
+  const drawPreview = ({ root, props }) => {
     const { utils } = _;
     const { createWorker } = utils;
     const { id } = props;
@@ -692,6 +716,9 @@ const createImageWrapperView = _ => {
 
       let imageWidth = 0;
       let imageHeight = 0;
+
+      imageWidth = previewContainerWidth;
+      imageHeight = imageWidth * previewImageRatio;
 
       if (previewImageRatio > 1) {
         imageWidth = previewContainerWidth;
@@ -739,44 +766,34 @@ const createImageWrapperView = _ => {
       pushImage({ root, props });
     };
 
-    // determine image size of this item
-    getImageSize(fileURL, (width, height) => {
-      // we can now scale the panel to the final size
-      root.dispatch('DID_IMAGE_PREVIEW_CALCULATE_SIZE', {
-        id,
-        width,
-        height
-      });
+    // if we support scaling using createImageBitmap we use a worker
+    if (canCreateImageBitmap(item.file)) {
+      // let's scale the image in a worker
+      const worker = createWorker(BitmapWorker);
 
-      // if we support scaling using createImageBitmap we use a worker
-      if (canCreateImageBitmap(item.file)) {
-        // let's scale the image in a worker
-        const worker = createWorker(BitmapWorker);
+      worker.post(
+        {
+          file: item.file
+        },
+        imageBitmap => {
+          // destroy worker
+          worker.terminate();
 
-        worker.post(
-          {
-            file: item.file
-          },
-          imageBitmap => {
-            // destroy worker
-            worker.terminate();
-
-            // no bitmap returned, must be something wrong,
-            // try the oldschool way
-            if (!imageBitmap) {
-              loadPreviewFallback();
-              return;
-            }
-
-            // yay we got our bitmap, let's continue showing the preview
-            previewImageLoaded(imageBitmap);
+          // no bitmap returned, must be something wrong,
+          // try the oldschool way
+          if (!imageBitmap) {
+            loadPreviewFallback();
+            return;
           }
-        );
-      } else {
-        // create fallback preview
-        loadPreviewFallback();
-      }
-    });
+
+          // yay we got our bitmap, let's continue showing the preview
+          previewImageLoaded(imageBitmap);
+        }
+      );
+    } else {
+      // create fallback preview
+      loadPreviewFallback();
+    }
   };
 
   /**
@@ -853,6 +870,7 @@ const createImageWrapperView = _ => {
         // image preview stated
         DID_IMAGE_PREVIEW_DRAW: didDrawPreview,
         DID_IMAGE_PREVIEW_CONTAINER_CREATE: didCreatePreviewContainer,
+        DID_FINISH_CALCULATE_PREVIEWSIZE: drawPreview,
         DID_UPDATE_ITEM_METADATA: didUpdateItemMetadata,
 
         // file states
@@ -1027,6 +1045,11 @@ var plugin$1 = fpAPI => {
 
       // let's scale the preview pane
       rescaleItem(root, props);
+
+      // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
+      requestAnimationFrame(() => {
+        root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE');
+      });
     };
 
     // start writing

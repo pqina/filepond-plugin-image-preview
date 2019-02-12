@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 4.0.1
+ * FilePondPluginImagePreview 4.0.2
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -82,8 +82,6 @@
   height: 100%;
   width: 100%;
   pointer-events: none;
-  -webkit-transform-origin: center center;
-  transform-origin: center center;
   background: #222;
   will-change: transform, opacity;
 }
