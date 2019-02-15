@@ -1,5 +1,5 @@
 /*
- * FilePondPluginImagePreview 4.0.2
+ * FilePondPluginImagePreview 4.0.3
  * Licensed under MIT, https://opensource.org/licenses/MIT
  * Please visit https://pqina.nl/filepond for details.
  */
@@ -410,39 +410,11 @@
     });
   };
 
-  /**
-   * Create gradient and mask definitions, we use these in each overlay so we can define them once
-   * Turns out this also helps Safari to render the gradient on time
-   */
-  var definitions =
-    "<radialGradient id=\"filepond--image-preview-radial-gradient\" cx=\".5\" cy=\"1.25\" r=\"1.15\">\n<stop offset='50%' stop-color='#000000'/>\n<stop offset='56%' stop-color='#0a0a0a'/>\n<stop offset='63%' stop-color='#262626'/>\n<stop offset='69%' stop-color='#4f4f4f'/>\n<stop offset='75%' stop-color='#808080'/>\n<stop offset='81%' stop-color='#b1b1b1'/>\n<stop offset='88%' stop-color='#dadada'/>\n<stop offset='94%' stop-color='#f6f6f6'/>\n<stop offset='100%' stop-color='#ffffff'/>\n</radialGradient>\n\n<mask id=\"filepond--image-preview-masking\">\n<rect x=\"0\" y=\"0\" width=\"500\" height=\"200\" fill=\"url(__URL__#filepond--image-preview-radial-gradient)\"></rect>\n</mask>";
+  var SVG_MASK =
+    '<svg width="500" height="200" viewBox="0 0 500 200" preserveAspectRatio="none">\n    <defs>\n        <radialGradient id="gradient-__UID__" cx=".5" cy="1.25" r="1.15">\n            <stop offset=\'50%\' stop-color=\'#000000\'/>\n            <stop offset=\'56%\' stop-color=\'#0a0a0a\'/>\n            <stop offset=\'63%\' stop-color=\'#262626\'/>\n            <stop offset=\'69%\' stop-color=\'#4f4f4f\'/>\n            <stop offset=\'75%\' stop-color=\'#808080\'/>\n            <stop offset=\'81%\' stop-color=\'#b1b1b1\'/>\n            <stop offset=\'88%\' stop-color=\'#dadada\'/>\n            <stop offset=\'94%\' stop-color=\'#f6f6f6\'/>\n            <stop offset=\'100%\' stop-color=\'#ffffff\'/>\n        </radialGradient>\n        <mask id="mask-__UID__">\n            <rect x="0" y="0" width="500" height="200" fill="url(#gradient-__UID__)"></rect>\n        </mask>\n    </defs>\n    <rect x="0" width="500" height="200" fill="currentColor" mask="url(#mask-__UID__)"></rect>\n</svg>';
 
-  var baseURL = '';
-
-  var appendDefinitions = function appendDefinitions() {
-    if (
-      !document.body ||
-      document.querySelector('.filepond--image-preview-sprite')
-    )
-      return;
-    baseURL = window.location.href.replace(window.location.hash, '');
-    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    defs.setAttribute('class', 'filepond--image-preview-sprite');
-    defs.style.cssText = 'position:absolute;width:0;height:0';
-    defs.innerHTML = definitions.replace(/__URL__/, baseURL);
-    document.body.appendChild(defs);
-  };
-
-  var hasNavigator = typeof navigator !== 'undefined';
-  if (hasNavigator) {
-    appendDefinitions();
-    document.addEventListener('readystatechange', appendDefinitions);
-  }
-
-  // need to know if this is IE11 so we can render the definitions with each overlay
-  var isEdgeOrIE = hasNavigator
-    ? document.documentMode || /Edge/.test(navigator.userAgent)
-    : false;
+  var checkedMyBases = false;
+  var SVGMaskUniqueId = 0;
 
   var createImageOverlayView = function createImageOverlayView(fpAPI) {
     return fpAPI.utils.createView({
@@ -453,15 +425,21 @@
         var root = _ref.root,
           props = _ref.props;
 
+        if (!checkedMyBases && document.querySelector('base')) {
+          SVG_MASK = SVG_MASK.replace(
+            /url\(\#/g,
+            'url(' +
+              window.location.href.replace(window.location.hash, '') +
+              '#'
+          );
+          checkedMyBases = true;
+        }
+
+        SVGMaskUniqueId++;
         root.element.classList.add(
           'filepond--image-preview-overlay-' + props.status
         );
-        root.element.innerHTML =
-          '<svg width="500" height="200" viewBox="0 0 500 200" preserveAspectRatio="none">\n                ' +
-          (isEdgeOrIE ? '<defs>' + definitions + '</defs>' : '') +
-          '\n                <rect x="0" width="500" height="200" fill="currentColor" mask="url(' +
-          baseURL +
-          '#filepond--image-preview-masking)"></rect>\n            </svg>\n            ';
+        root.element.innerHTML = SVG_MASK.replace(/__UID__/g, SVGMaskUniqueId);
       },
       mixins: {
         styles: ['opacity'],
