@@ -1,8 +1,8 @@
-/*
- * FilePondPluginImagePreview 4.0.3
- * Licensed under MIT, https://opensource.org/licenses/MIT
- * Please visit https://pqina.nl/filepond for details.
- */
+/*!
+* FilePondPluginImagePreview 4.0.4
+* Licensed under MIT, https://opensource.org/licenses/MIT/
+* Please visit https://pqina.nl/filepond for details.
+*/
 
 /* eslint-disable */
 .filepond--image-preview-wrapper {
@@ -48,7 +48,8 @@
   color: #c44e47;
 }
 
-@supports (-webkit-marquee-repetition: infinite) and (object-fit: fill) {
+@supports (-webkit-marquee-repetition: infinite) and
+  ((-o-object-fit: fill) or (object-fit: fill)) {
   .filepond--image-preview-overlay-idle {
     mix-blend-mode: normal;
   }
@@ -75,8 +76,10 @@
   left: 0;
   top: 0;
   z-index: 1;
+  display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
+  -webkit-box-align: center;
   -ms-flex-align: center;
   align-items: center;
   height: 100%;
@@ -114,10 +117,13 @@
 .filepond--root[data-style-panel-layout~='integrated']
   .filepond--image-preview {
   height: 100%;
+  display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
+  -webkit-box-pack: center;
   -ms-flex-pack: center;
   justify-content: center;
+  -webkit-box-align: center;
   -ms-flex-align: center;
   align-items: center;
 }
@@ -132,6 +138,7 @@
   top: auto;
   bottom: 0;
   -webkit-transform: scaleY(-1);
+  -ms-transform: scaleY(-1);
   transform: scaleY(-1);
 }
 

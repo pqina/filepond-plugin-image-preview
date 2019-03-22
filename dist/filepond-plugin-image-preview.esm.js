@@ -1,10 +1,11 @@
-/*
- * FilePondPluginImagePreview 4.0.3
- * Licensed under MIT, https://opensource.org/licenses/MIT
- * Please visit https://pqina.nl/filepond for details.
- */
+/*!
+* FilePondPluginImagePreview 4.0.4
+* Licensed under MIT, https://opensource.org/licenses/MIT/
+* Please visit https://pqina.nl/filepond for details.
+*/
 
 /* eslint-disable */
+
 // test if file is of type image and can be viewed in canvas
 const isPreviewableImage = file => /^image/.test(file.type);
 
@@ -201,8 +202,9 @@ const createClipView = _ =>
       // grid pattern
       if (transparencyIndicator === 'grid') {
         root.element.dataset.transparencyIndicator = transparencyIndicator;
-      } else {
-        // basic color
+      }
+      // basic color
+      else {
         root.element.dataset.transparencyIndicator = 'color';
       }
     },
@@ -237,7 +239,7 @@ const createClipView = _ =>
         y: stage.center.y - image.height * crop.center.y
       };
 
-      const rotation = Math.PI * 2 + crop.rotation % (Math.PI * 2);
+      const rotation = Math.PI * 2 + (crop.rotation % (Math.PI * 2));
 
       const cropAspectRatio = crop.aspectRatio || image.height / image.width;
 
@@ -445,7 +447,7 @@ const fixImageOrientation = (ctx, width, height, orientation) => {
     return;
   }
 
-  ctx.transform(...transforms[orientation](width, height));
+  ctx.transform.apply(ctx, transforms[orientation](width, height));
 };
 
 // draws the preview image to canvas
@@ -618,8 +620,9 @@ const createImageWrapperView = _ => {
     if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
       shiftImage({ root });
       pushImage({ root, props });
-    } else {
-      // if not, we can update the current image
+    }
+    // if not, we can update the current image
+    else {
       updateImage({ root, props });
     }
   };
@@ -884,7 +887,8 @@ const createImageWrapperView = _ => {
 /**
  * Image Preview Plugin
  */
-var plugin$1 = fpAPI => {
+
+const plugin = fpAPI => {
   const { addFilter, utils } = fpAPI;
   const { Type, createRoute, isFile } = utils;
 
@@ -921,8 +925,7 @@ var plugin$1 = fpAPI => {
       const maxPreviewFileSize = query('GET_IMAGE_PREVIEW_MAX_FILE_SIZE');
       if (
         !supportsCreateImageBitmap &&
-        maxPreviewFileSize &&
-        file.size > maxPreviewFileSize
+        (maxPreviewFileSize && file.size > maxPreviewFileSize)
       )
         return;
 
@@ -1075,13 +1078,13 @@ var plugin$1 = fpAPI => {
   };
 };
 
+// fire pluginloaded event if running in browser, this allows registering the plugin when using async script tags
 const isBrowser =
   typeof window !== 'undefined' && typeof window.document !== 'undefined';
-
 if (isBrowser) {
   document.dispatchEvent(
-    new CustomEvent('FilePond:pluginloaded', { detail: plugin$1 })
+    new CustomEvent('FilePond:pluginloaded', { detail: plugin })
   );
 }
 
-export default plugin$1;
+export default plugin;
