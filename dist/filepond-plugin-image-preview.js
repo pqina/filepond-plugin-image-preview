@@ -1,8 +1,8 @@
 /*!
-* FilePondPluginImagePreview 4.0.4
-* Licensed under MIT, https://opensource.org/licenses/MIT/
-* Please visit https://pqina.nl/filepond for details.
-*/
+ * FilePondPluginImagePreview 4.0.4
+ * Licensed under MIT, https://opensource.org/licenses/MIT/
+ * Please visit https://pqina.nl/filepond/ for details.
+ */
 
 /* eslint-disable */
 
@@ -712,8 +712,6 @@
     var didCreatePreviewContainer = function didCreatePreviewContainer(_ref5) {
       var root = _ref5.root,
         props = _ref5.props;
-      var utils = _.utils;
-      var createWorker = utils.createWorker;
       var id = props.id; // we need to get the file data to determine the eventual image size
 
       var item = root.query('GET_ITEM', id);

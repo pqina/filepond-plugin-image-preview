@@ -131,8 +131,6 @@ export const createImageWrapperView = _ => {
      */
     const didCreatePreviewContainer = ({ root, props }) => {
 
-        const { utils } = _;
-        const { createWorker } = utils;
         const { id } = props;
 
         // we need to get the file data to determine the eventual image size

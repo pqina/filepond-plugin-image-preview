@@ -5,9 +5,9 @@
     "license": "MIT",
     "author": {
         "name": "PQINA",
-        "url": "https://pqina.nl"
+        "url": "https://pqina.nl/"
     },
-    "homepage": "https://pqina.nl/filepond",
+    "homepage": "https://pqina.nl/filepond/",
     "repository": "pqina/filepond-plugin-image-preview",
     "main": "dist/filepond-plugin-image-preview.js",
     "browser": "dist/filepond-plugin-image-preview.js",
