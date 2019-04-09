@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.0.6
+ * FilePondPluginImagePreview 4.0.7
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -118,13 +118,10 @@ const getCenteredCropRect = (container, aspectRatio) => {
 const createBitmapView = _ =>
   _.utils.createView({
     name: 'image-bitmap',
-    tag: 'canvas',
     ignoreRect: true,
-    mixins: {
-      styles: ['scaleX', 'scaleY']
-    },
+    mixins: { styles: ['scaleX', 'scaleY'] },
     create: ({ root, props }) => {
-      cloneCanvas(props.image, root.element);
+      root.appendChild(props.image);
     }
   });
 
@@ -158,15 +155,15 @@ const createImageCanvasWrapper = _ =>
     create: ({ root, props }) => {
       props.width = props.image.width;
       props.height = props.image.height;
-      root.ref.image = root.appendChildView(
+      root.ref.bitmap = root.appendChildView(
         root.createChildView(createBitmapView(_), { image: props.image })
       );
     },
     write: ({ root, props }) => {
       const { flip } = props.crop;
-      const { image } = root.ref;
-      image.scaleX = flip.horizontal ? -1 : 1;
-      image.scaleY = flip.vertical ? -1 : 1;
+      const { bitmap } = root.ref;
+      bitmap.scaleX = flip.horizontal ? -1 : 1;
+      bitmap.scaleY = flip.vertical ? -1 : 1;
     }
   });
 
@@ -282,7 +279,7 @@ const createImageView = _ =>
     tag: 'div',
     ignoreRect: true,
     mixins: {
-      apis: ['crop'],
+      apis: ['crop', 'image'],
       styles: ['translateY', 'scaleX', 'scaleY', 'opacity'],
       animations: {
         scaleX: IMAGE_SCALE_SPRING_PROPS,
@@ -532,7 +529,9 @@ const loadImage = url =>
 
 const createImageWrapperView = _ => {
   // create overlay view
-  const overlay = createImageOverlayView(_);
+  const OverlayView = createImageOverlayView(_);
+
+  const ImageView = createImageView(_);
 
   const removeImageView = (root, imageView) => {
     root.removeChildView(imageView);
@@ -541,21 +540,19 @@ const createImageWrapperView = _ => {
 
   // remove an image
   const shiftImage = ({ root }) => {
-    const image = root.ref.images.shift();
-    image.opacity = 0;
-    image.translateY = -15;
-    root.ref.imageViewBin.push(image);
+    const imageView = root.ref.images.shift();
+    imageView.opacity = 0;
+    imageView.translateY = -15;
+    root.ref.imageViewBin.push(imageView);
+    return imageView;
   };
 
-  const ImageView = createImageView(_);
-
   // add new image
-  const pushImage = ({ root, props }) => {
+  const pushImage = ({ root, props, image }) => {
     const id = props.id;
     const item = root.query('GET_ITEM', { id });
     if (!item) return;
 
-    const image = props.preview;
     const crop = item.getMetadata('crop') || {
       center: {
         x: 0.5,
@@ -584,7 +581,7 @@ const createImageWrapperView = _ => {
     );
     root.ref.images.push(imageView);
 
-    // reveal
+    // reveal the preview image
     imageView.opacity = 1;
     imageView.scaleX = 1;
     imageView.scaleY = 1;
@@ -618,8 +615,8 @@ const createImageWrapperView = _ => {
 
     // if aspect ratio has changed, we need to create a new image
     if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
-      shiftImage({ root });
-      pushImage({ root, props });
+      const imageView = shiftImage({ root });
+      pushImage({ root, props, image: imageView.image });
     }
     // if not, we can update the current image
     else {
@@ -719,7 +716,7 @@ const createImageWrapperView = _ => {
       }
 
       // transfer to image tag so no canvas memory wasted on iOS
-      props.preview = createPreviewImage(
+      const previewImage = createPreviewImage(
         data,
         imageWidth,
         imageHeight,
@@ -743,7 +740,7 @@ const createImageWrapperView = _ => {
       root.ref.overlayShadow.opacity = 1;
 
       // create the first image
-      pushImage({ root, props });
+      pushImage({ root, props, image: previewImage });
     };
 
     // if we support scaling using createImageBitmap we use a worker
@@ -819,21 +816,21 @@ const createImageWrapperView = _ => {
 
     // image overlays
     root.ref.overlayShadow = root.appendChildView(
-      root.createChildView(overlay, {
+      root.createChildView(OverlayView, {
         opacity: 0,
         status: 'idle'
       })
     );
 
     root.ref.overlaySuccess = root.appendChildView(
-      root.createChildView(overlay, {
+      root.createChildView(OverlayView, {
         opacity: 0,
         status: 'success'
       })
     );
 
     root.ref.overlayError = root.appendChildView(
-      root.createChildView(overlay, {
+      root.createChildView(OverlayView, {
         opacity: 0,
         status: 'failure'
       })
@@ -845,6 +842,13 @@ const createImageWrapperView = _ => {
     create,
     styles: ['height'],
     apis: ['height'],
+    destroy: ({ root }) => {
+      // we resize the image so memory on iOS 12 is released more quickly (it seems)
+      root.ref.images.forEach(imageView => {
+        imageView.image.width = 1;
+        imageView.image.height = 1;
+      });
+    },
     write: _.utils.createRoute(
       {
         // image preview stated
@@ -1028,7 +1032,7 @@ const plugin = fpAPI => {
 
       // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
       requestAnimationFrame(() => {
-        root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE');
+        root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', { id: props.id });
       });
     };
 
@@ -1063,7 +1067,7 @@ const plugin = fpAPI => {
       imagePreviewMaxFileSize: [null, Type.INT],
 
       // The amount of extra pixels added to the image preview to allow comfortable zooming
-      imagePreviewZoomFactor: [2, Type.NUMBER],
+      imagePreviewZoomFactor: [2, Type.INT],
 
       // Max size of preview file that we allow to try to instant preview if createImageBitmap is not supported, else image is queued for loading
       imagePreviewMaxInstantPreviewFileSize: [1000000, Type.INT],

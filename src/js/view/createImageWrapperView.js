@@ -22,7 +22,9 @@ const loadImage = (url) => new Promise((resolve, reject) => {
 export const createImageWrapperView = _ => {
 
     // create overlay view
-    const overlay = createImageOverlayView(_);
+    const OverlayView = createImageOverlayView(_);
+
+    const ImageView = createImageView(_);
 
     const removeImageView = (root, imageView) => {
         root.removeChildView(imageView);
@@ -31,22 +33,20 @@ export const createImageWrapperView = _ => {
 
     // remove an image
     const shiftImage = ({ root }) => {
-        const image = root.ref.images.shift();
-        image.opacity = 0;
-        image.translateY = -15;
-        root.ref.imageViewBin.push(image);
+        const imageView = root.ref.images.shift();
+        imageView.opacity = 0;
+        imageView.translateY = -15;
+        root.ref.imageViewBin.push(imageView);
+        return imageView;
     };
 
-    const ImageView = createImageView(_);
-
     // add new image
-    const pushImage = ({ root, props }) => {
+    const pushImage = ({ root, props, image }) => {
         
         const id = props.id;
         const item = root.query('GET_ITEM', { id });
         if (!item) return;
 
-        const image = props.preview;
         const crop = item.getMetadata('crop') || {
             center: {
                 x:.5,
@@ -75,7 +75,7 @@ export const createImageWrapperView = _ => {
         );
         root.ref.images.push(imageView);
 
-        // reveal
+        // reveal the preview image
         imageView.opacity = 1;
         imageView.scaleX = 1;
         imageView.scaleY = 1;
@@ -112,8 +112,8 @@ export const createImageWrapperView = _ => {
         
         // if aspect ratio has changed, we need to create a new image 
         if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > .00001) {
-            shiftImage({ root });
-            pushImage({ root, props });
+            const imageView = shiftImage({ root });
+            pushImage({ root, props, image: imageView.image });
         }
         // if not, we can update the current image
         else {
@@ -221,7 +221,7 @@ export const createImageWrapperView = _ => {
             }
 
             // transfer to image tag so no canvas memory wasted on iOS
-            props.preview = createPreviewImage(data, imageWidth, imageHeight, orientation);
+            const previewImage = createPreviewImage(data, imageWidth, imageHeight, orientation);
 
             // calculate average image color, disabled for now
             const averageColor = root.query('GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR') ? calculateAverageColor(data) : null;
@@ -236,7 +236,7 @@ export const createImageWrapperView = _ => {
             root.ref.overlayShadow.opacity = 1;
 
             // create the first image
-            pushImage({ root, props });
+            pushImage({ root, props, image: previewImage });
         };
 
         // if we support scaling using createImageBitmap we use a worker
@@ -316,21 +316,21 @@ export const createImageWrapperView = _ => {
 
         // image overlays
         root.ref.overlayShadow = root.appendChildView(
-            root.createChildView(overlay, {
+            root.createChildView(OverlayView, {
                 opacity: 0,
                 status: 'idle'
             })
         );
 
         root.ref.overlaySuccess = root.appendChildView(
-            root.createChildView(overlay, {
+            root.createChildView(OverlayView, {
                 opacity: 0,
                 status: 'success'
             })
         );
 
         root.ref.overlayError = root.appendChildView(
-            root.createChildView(overlay, {
+            root.createChildView(OverlayView, {
                 opacity: 0,
                 status: 'failure'
             })
@@ -347,6 +347,13 @@ export const createImageWrapperView = _ => {
         apis: [
             'height'
         ],
+        destroy: ({ root }) => {
+            // we resize the image so memory on iOS 12 is released more quickly (it seems)
+            root.ref.images.forEach(imageView => {
+                imageView.image.width = 1;
+                imageView.image.height = 1;
+            });
+        },
         write: _.utils.createRoute({
             // image preview stated
             DID_IMAGE_PREVIEW_DRAW: didDrawPreview,
@@ -372,6 +379,7 @@ export const createImageWrapperView = _ => {
             // remove these views
             viewsToRemove.forEach(imageView => removeImageView(root, imageView));
             viewsToRemove.length = 0;
+
         })
     });
 };

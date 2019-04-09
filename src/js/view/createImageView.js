@@ -107,16 +107,10 @@ const getCenteredCropRect = (container, aspectRatio) => {
 // does horizontal and vertical flipping
 const createBitmapView = _ => _.utils.createView({
     name: 'image-bitmap',
-    tag: 'canvas',
     ignoreRect: true,
-    mixins: {
-        styles: [
-            'scaleX',
-            'scaleY',
-        ]
-    },
+    mixins: { styles: ['scaleX', 'scaleY'] },
     create:({ root, props }) => {
-        cloneCanvas(props.image, root.element);
+        root.appendChild(props.image);
     }
 });
 
@@ -154,15 +148,17 @@ const createImageCanvasWrapper = _ => _.utils.createView({
     create:({ root, props }) => {
         props.width = props.image.width;
         props.height = props.image.height;
-        root.ref.image = root.appendChildView(
-            root.createChildView(createBitmapView(_), { image: props.image })
+        root.ref.bitmap = root.appendChildView(
+            root.createChildView(
+                createBitmapView(_), { image: props.image }
+            )
         );
     },
     write:({ root, props }) => {
         const { flip } = props.crop;
-        const { image } = root.ref;
-        image.scaleX = flip.horizontal ? -1 : 1;
-        image.scaleY = flip.vertical ? -1 : 1;
+        const { bitmap } = root.ref;
+        bitmap.scaleX = flip.horizontal ? -1 : 1;
+        bitmap.scaleY = flip.vertical ? -1 : 1;
     }
 });
 
@@ -279,7 +275,8 @@ export const createImageView = _ => _.utils.createView({
     ignoreRect: true,
     mixins: {
         apis: [
-            'crop'
+            'crop',
+            'image'
         ],
         styles: [
             'translateY',

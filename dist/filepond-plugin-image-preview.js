@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.0.6
+ * FilePondPluginImagePreview 4.0.7
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -147,16 +147,12 @@
   var createBitmapView = function createBitmapView(_) {
     return _.utils.createView({
       name: 'image-bitmap',
-      tag: 'canvas',
       ignoreRect: true,
-      mixins: {
-        styles: ['scaleX', 'scaleY']
-      },
-
+      mixins: { styles: ['scaleX', 'scaleY'] },
       create: function create(_ref) {
         var root = _ref.root,
           props = _ref.props;
-        cloneCanvas(props.image, root.element);
+        root.appendChild(props.image);
       }
     });
   };
@@ -196,7 +192,7 @@
           props = _ref2.props;
         props.width = props.image.width;
         props.height = props.image.height;
-        root.ref.image = root.appendChildView(
+        root.ref.bitmap = root.appendChildView(
           root.createChildView(createBitmapView(_), { image: props.image })
         );
       },
@@ -204,9 +200,9 @@
         var root = _ref3.root,
           props = _ref3.props;
         var flip = props.crop.flip;
-        var image = root.ref.image;
-        image.scaleX = flip.horizontal ? -1 : 1;
-        image.scaleY = flip.vertical ? -1 : 1;
+        var bitmap = root.ref.bitmap;
+        bitmap.scaleX = flip.horizontal ? -1 : 1;
+        bitmap.scaleY = flip.vertical ? -1 : 1;
       }
     });
   };
@@ -334,7 +330,7 @@
       tag: 'div',
       ignoreRect: true,
       mixins: {
-        apis: ['crop'],
+        apis: ['crop', 'image'],
 
         styles: ['translateY', 'scaleX', 'scaleY', 'opacity'],
 
@@ -615,7 +611,9 @@
 
   var createImageWrapperView = function createImageWrapperView(_) {
     // create overlay view
-    var overlay = createImageOverlayView(_);
+    var OverlayView = createImageOverlayView(_);
+
+    var ImageView = createImageView(_);
 
     var removeImageView = function removeImageView(root, imageView) {
       root.removeChildView(imageView);
@@ -625,24 +623,23 @@
     // remove an image
     var shiftImage = function shiftImage(_ref) {
       var root = _ref.root;
-      var image = root.ref.images.shift();
-      image.opacity = 0;
-      image.translateY = -15;
-      root.ref.imageViewBin.push(image);
+      var imageView = root.ref.images.shift();
+      imageView.opacity = 0;
+      imageView.translateY = -15;
+      root.ref.imageViewBin.push(imageView);
+      return imageView;
     };
-
-    var ImageView = createImageView(_);
 
     // add new image
     var pushImage = function pushImage(_ref2) {
       var root = _ref2.root,
-        props = _ref2.props;
+        props = _ref2.props,
+        image = _ref2.image;
 
       var id = props.id;
       var item = root.query('GET_ITEM', { id: id });
       if (!item) return;
 
-      var image = props.preview;
       var crop = item.getMetadata('crop') || {
         center: {
           x: 0.5,
@@ -675,7 +672,7 @@
 
       root.ref.images.push(imageView);
 
-      // reveal
+      // reveal the preview image
       imageView.opacity = 1;
       imageView.scaleX = 1;
       imageView.scaleY = 1;
@@ -716,8 +713,8 @@
 
       // if aspect ratio has changed, we need to create a new image
       if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
-        shiftImage({ root: root });
-        pushImage({ root: root, props: props });
+        var imageView = shiftImage({ root: root });
+        pushImage({ root: root, props: props, image: imageView.image });
       }
       // if not, we can update the current image
       else {
@@ -825,7 +822,7 @@
         }
 
         // transfer to image tag so no canvas memory wasted on iOS
-        props.preview = createPreviewImage(
+        var previewImage = createPreviewImage(
           data,
           imageWidth,
           imageHeight,
@@ -849,7 +846,7 @@
         root.ref.overlayShadow.opacity = 1;
 
         // create the first image
-        pushImage({ root: root, props: props });
+        pushImage({ root: root, props: props, image: previewImage });
       };
 
       // if we support scaling using createImageBitmap we use a worker
@@ -932,21 +929,21 @@
 
       // image overlays
       root.ref.overlayShadow = root.appendChildView(
-        root.createChildView(overlay, {
+        root.createChildView(OverlayView, {
           opacity: 0,
           status: 'idle'
         })
       );
 
       root.ref.overlaySuccess = root.appendChildView(
-        root.createChildView(overlay, {
+        root.createChildView(OverlayView, {
           opacity: 0,
           status: 'success'
         })
       );
 
       root.ref.overlayError = root.appendChildView(
-        root.createChildView(overlay, {
+        root.createChildView(OverlayView, {
           opacity: 0,
           status: 'failure'
         })
@@ -960,6 +957,14 @@
 
       apis: ['height'],
 
+      destroy: function destroy(_ref13) {
+        var root = _ref13.root;
+        // we resize the image so memory on iOS 12 is released more quickly (it seems)
+        root.ref.images.forEach(function(imageView) {
+          imageView.image.width = 1;
+          imageView.image.height = 1;
+        });
+      },
       write: _.utils.createRoute(
         {
           // image preview stated
@@ -976,8 +981,8 @@
           DID_START_ITEM_PROCESSING: restoreOverlay,
           DID_REVERT_ITEM_PROCESSING: restoreOverlay
         },
-        function(_ref13) {
-          var root = _ref13.root;
+        function(_ref14) {
+          var root = _ref14.root;
 
           // views on death row
           var viewsToRemove = root.ref.imageViewBin.filter(function(imageView) {
@@ -1171,7 +1176,7 @@
 
         // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
         requestAnimationFrame(function() {
-          root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE');
+          root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', { id: props.id });
         });
       };
 
@@ -1206,7 +1211,7 @@
         imagePreviewMaxFileSize: [null, Type.INT],
 
         // The amount of extra pixels added to the image preview to allow comfortable zooming
-        imagePreviewZoomFactor: [2, Type.NUMBER],
+        imagePreviewZoomFactor: [2, Type.INT],
 
         // Max size of preview file that we allow to try to instant preview if createImageBitmap is not supported, else image is queued for loading
         imagePreviewMaxInstantPreviewFileSize: [1000000, Type.INT],
