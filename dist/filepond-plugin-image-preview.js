@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.0.7
+ * FilePondPluginImagePreview 4.0.8
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -617,6 +617,8 @@
 
     var removeImageView = function removeImageView(root, imageView) {
       root.removeChildView(imageView);
+      imageView.image.width = 1;
+      imageView.image.height = 1;
       imageView._destroy();
     };
 
@@ -687,10 +689,8 @@
     var updateImage = function updateImage(_ref3) {
       var root = _ref3.root,
         props = _ref3.props;
-
       var item = root.query('GET_ITEM', { id: props.id });
       if (!item) return;
-
       var imageView = root.ref.images[root.ref.images.length - 1];
       imageView.crop = item.getMetadata('crop');
     };
@@ -714,7 +714,11 @@
       // if aspect ratio has changed, we need to create a new image
       if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
         var imageView = shiftImage({ root: root });
-        pushImage({ root: root, props: props, image: imageView.image });
+        pushImage({
+          root: root,
+          props: props,
+          image: cloneCanvas(imageView.image)
+        });
       }
       // if not, we can update the current image
       else {
