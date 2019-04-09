@@ -190,7 +190,16 @@ export const createImageWrapperView = _ => {
             }
 
             // scale canvas based on pixel density
-            const pixelDensityFactor = window.devicePixelRatio;
+            // we multiply by .75 as that creates smaller but still clear images on screens with high res displays
+            const pixelDensityFactor = Math.max(1, window.devicePixelRatio * .75);
+
+            // we want as much pixels to work with as possible,
+            // this multiplies the minimum image resolution,
+            // so when zooming in it doesn't get too blurry
+            const zoomFactor = root.query('GET_IMAGE_PREVIEW_ZOOM_FACTOR');
+
+            // imaeg scale factor
+            const scaleFactor = zoomFactor * pixelDensityFactor;
 
             // calculate scaled preview image size
             const previewImageRatio = height / width;
@@ -199,32 +208,20 @@ export const createImageWrapperView = _ => {
             const previewContainerWidth = root.rect.element.width;
             const previewContainerHeight = root.rect.element.height;
 
-            let imageWidth = 0;
-            let imageHeight = 0;
-
-            imageWidth = previewContainerWidth;
-            imageHeight = imageWidth * previewImageRatio;
+            let imageWidth = previewContainerWidth;
+            let imageHeight = imageWidth * previewImageRatio;
 
             if (previewImageRatio > 1) {
-                imageWidth = previewContainerWidth;
+                imageWidth = Math.min(width, previewContainerWidth * scaleFactor);
                 imageHeight = imageWidth * previewImageRatio;
             }
             else {
-                imageHeight = previewContainerHeight;
+                imageHeight = Math.min(height, previewContainerHeight * scaleFactor);
                 imageWidth = imageHeight / previewImageRatio;
             }
 
-            // we want as much pixels to work with as possible,
-            // this multiplies the minimum image resolution
-            const resolutionScaleFactor = 4;
-
             // transfer to image tag so no canvas memory wasted on iOS
-            props.preview = createPreviewImage(
-                data,
-                Math.min(width, imageWidth * pixelDensityFactor * resolutionScaleFactor),
-                Math.min(height, imageHeight * pixelDensityFactor * resolutionScaleFactor),
-                orientation
-            );
+            props.preview = createPreviewImage(data, imageWidth, imageHeight, orientation);
 
             // calculate average image color, disabled for now
             const averageColor = root.query('GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR') ? calculateAverageColor(data) : null;

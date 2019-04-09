@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.0.5
+ * FilePondPluginImagePreview 4.0.6
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -795,7 +795,16 @@
         }
 
         // scale canvas based on pixel density
-        var pixelDensityFactor = window.devicePixelRatio;
+        // we multiply by .75 as that creates smaller but still clear images on screens with high res displays
+        var pixelDensityFactor = Math.max(1, window.devicePixelRatio * 0.75);
+
+        // we want as much pixels to work with as possible,
+        // this multiplies the minimum image resolution,
+        // so when zooming in it doesn't get too blurry
+        var zoomFactor = root.query('GET_IMAGE_PREVIEW_ZOOM_FACTOR');
+
+        // imaeg scale factor
+        var scaleFactor = zoomFactor * pixelDensityFactor;
 
         // calculate scaled preview image size
         var previewImageRatio = height / width;
@@ -804,35 +813,22 @@
         var previewContainerWidth = root.rect.element.width;
         var previewContainerHeight = root.rect.element.height;
 
-        var imageWidth = 0;
-        var imageHeight = 0;
-
-        imageWidth = previewContainerWidth;
-        imageHeight = imageWidth * previewImageRatio;
+        var imageWidth = previewContainerWidth;
+        var imageHeight = imageWidth * previewImageRatio;
 
         if (previewImageRatio > 1) {
-          imageWidth = previewContainerWidth;
+          imageWidth = Math.min(width, previewContainerWidth * scaleFactor);
           imageHeight = imageWidth * previewImageRatio;
         } else {
-          imageHeight = previewContainerHeight;
+          imageHeight = Math.min(height, previewContainerHeight * scaleFactor);
           imageWidth = imageHeight / previewImageRatio;
         }
-
-        // we want as much pixels to work with as possible,
-        // this multiplies the minimum image resolution
-        var resolutionScaleFactor = 4;
 
         // transfer to image tag so no canvas memory wasted on iOS
         props.preview = createPreviewImage(
           data,
-          Math.min(
-            width,
-            imageWidth * pixelDensityFactor * resolutionScaleFactor
-          ),
-          Math.min(
-            height,
-            imageHeight * pixelDensityFactor * resolutionScaleFactor
-          ),
+          imageWidth,
+          imageHeight,
           orientation
         );
 
@@ -1208,6 +1204,9 @@
 
         // Max size of preview file for when createImageBitmap is not supported
         imagePreviewMaxFileSize: [null, Type.INT],
+
+        // The amount of extra pixels added to the image preview to allow comfortable zooming
+        imagePreviewZoomFactor: [2, Type.NUMBER],
 
         // Max size of preview file that we allow to try to instant preview if createImageBitmap is not supported, else image is queued for loading
         imagePreviewMaxInstantPreviewFileSize: [1000000, Type.INT],

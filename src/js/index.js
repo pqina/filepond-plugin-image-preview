@@ -173,6 +173,9 @@ const plugin = fpAPI => {
             // Max size of preview file for when createImageBitmap is not supported
             imagePreviewMaxFileSize: [null, Type.INT],
 
+            // The amount of extra pixels added to the image preview to allow comfortable zooming 
+            imagePreviewZoomFactor: [2, Type.NUMBER],
+
             // Max size of preview file that we allow to try to instant preview if createImageBitmap is not supported, else image is queued for loading
             imagePreviewMaxInstantPreviewFileSize: [1000000, Type.INT],
 
