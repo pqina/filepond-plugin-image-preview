@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.0.8
+ * FilePondPluginImagePreview 4.1.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -983,7 +983,7 @@ const plugin = fpAPI => {
         [imageWidth, imageHeight] = [imageHeight, imageWidth];
 
       // scale up width and height when we're dealing with an SVG
-      if (!isBitmap(item.file)) {
+      if (!isBitmap(item.file) || root.query('GET_IMAGE_PREVIEW_UPSCALE')) {
         const scalar = 2048 / imageWidth;
         imageWidth *= scalar;
         imageHeight *= scalar;
@@ -1069,6 +1069,9 @@ const plugin = fpAPI => {
 
       // The amount of extra pixels added to the image preview to allow comfortable zooming
       imagePreviewZoomFactor: [2, Type.INT],
+
+      // Should we upscale small images to fit the max bounding box of the preview area
+      imagePreviewUpscale: [false, Type.BOOLEAN],
 
       // Max size of preview file that we allow to try to instant preview if createImageBitmap is not supported, else image is queued for loading
       imagePreviewMaxInstantPreviewFileSize: [1000000, Type.INT],
