@@ -25,7 +25,7 @@ const plugin = fpAPI => {
         }
 
         // create the image preview plugin, but only do so if the item is an image
-        const didLoadItem = ({ root, props, actions }) => {
+        const didLoadItem = ({ root, props }) => {
 
             const { id } = props;
             const item = query('GET_ITEM', id);
@@ -118,28 +118,31 @@ const plugin = fpAPI => {
             });
         };
 
-        const didResizeView = ({ root, props }) => {
-            rescaleItem(root, props);
+        const didResizeView = ({ root }) => {
+            // actions in next write operation
+            root.ref.shouldRescale = true;
         };
 
-        const didUpdateItemMetadata = ({ root, props, action }) => {
+        const didUpdateItemMetadata = ({ root, action }) => {
+
             if (action.change.key !== 'crop') return;
-            rescaleItem(root, props);
+
+            // actions in next write operation
+            root.ref.shouldRescale = true;
         };
 
-        const didCalculatePreviewSize = ({ root, props, action }) => {
+        const didCalculatePreviewSize = ({ root, action }) => {
 
             // remember dimensions
             root.ref.imageWidth = action.width;
             root.ref.imageHeight = action.height;
 
-            // let's scale the preview pane
-            rescaleItem(root, props);
+            // actions in next write operation
+            root.ref.shouldRescale = true;
+            root.ref.shouldDrawPreview = true;
 
-            // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
-            requestAnimationFrame(() => {
-                root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', { id: props.id });
-            });
+            // as image load could take a while and fire when draw loop is resting we need to give it a kick
+            root.dispatch('KICK');
         };
 
         // start writing
@@ -150,6 +153,25 @@ const plugin = fpAPI => {
                 DID_LOAD_ITEM: didLoadItem,
                 DID_IMAGE_PREVIEW_CALCULATE_SIZE: didCalculatePreviewSize,
                 DID_UPDATE_ITEM_METADATA: didUpdateItemMetadata
+            }, ({ root, props }) => {
+
+                // don't do anything while hidden
+                if (root.rect.element.hidden) return;
+
+                // resize the item panel
+                if (root.ref.shouldRescale) {
+                    rescaleItem(root, props);
+                    root.ref.shouldRescale = false;
+                }
+
+                if (root.ref.shouldDrawPreview) {
+                    // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
+                    requestAnimationFrame(() => {
+                        root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', { id: props.id });
+                    });
+                    root.ref.shouldDrawPreview = false;
+                }
+
             })
         );
         

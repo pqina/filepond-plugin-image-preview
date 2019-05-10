@@ -1,5 +1,3 @@
-import { cloneCanvas } from '../utils/cloneCanvas';
-
 const IMAGE_SCALE_SPRING_PROPS = {
     type: 'spring',
     stiffness: 0.5,
@@ -309,9 +307,9 @@ export const createImageView = _ => _.utils.createView({
 
         // don't update clip layout
         clip.opacity = shouldOptimize ? 0 : 1;
-        if (shouldOptimize) {
-            return;
-        }
+        
+        // don't re-render if optimizing or hidden (width will be zero resulting in weird animations)
+        if (shouldOptimize || root.rect.element.hidden) return;
 
         // calculate scaled preview image size
         const imageAspectRatio = image.height / image.width;
