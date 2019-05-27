@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.1.1
+ * FilePondPluginImagePreview 4.2.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -1166,10 +1166,10 @@ const plugin = fpAPI => {
     };
 
     const didUpdateItemMetadata = ({ root, action }) => {
+      if (action.change.key !== 'crop') return;
+
       // actions in next write operation
-      if (/crop/.test(action.change.key)) {
-        root.ref.shouldRescale = true;
-      }
+      root.ref.shouldRescale = true;
     };
 
     const didCalculatePreviewSize = ({ root, action }) => {
