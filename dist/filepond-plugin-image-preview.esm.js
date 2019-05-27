@@ -407,6 +407,76 @@ const BitmapWorker = function() {
   };
 };
 
+/**
+ * ColorMatrix Worker
+ */
+const ColorMatrixWorker = function() {
+  self.onmessage = e => {
+    const imageData = e.data.message.imageData;
+    const matrix = e.data.message.colorMatrix;
+
+    const data = imageData.data;
+    const l = data.length;
+
+    const m11 = matrix[0];
+    const m12 = matrix[1];
+    const m13 = matrix[2];
+    const m14 = matrix[3];
+    const m15 = matrix[4];
+
+    const m21 = matrix[5];
+    const m22 = matrix[6];
+    const m23 = matrix[7];
+    const m24 = matrix[8];
+    const m25 = matrix[9];
+
+    const m31 = matrix[10];
+    const m32 = matrix[11];
+    const m33 = matrix[12];
+    const m34 = matrix[13];
+    const m35 = matrix[14];
+
+    const m41 = matrix[15];
+    const m42 = matrix[16];
+    const m43 = matrix[17];
+    const m44 = matrix[18];
+    const m45 = matrix[19];
+
+    let index = 0,
+      r = 0.0,
+      g = 0.0,
+      b = 0.0,
+      a = 0.0;
+
+    for (; index < l; index += 4) {
+      r = data[index] / 255;
+      g = data[index + 1] / 255;
+      b = data[index + 2] / 255;
+      a = data[index + 3] / 255;
+      data[index] = Math.max(
+        0,
+        Math.min((r * m11 + g * m12 + b * m13 + a * m14 + m15) * 255, 255)
+      );
+      data[index + 1] = Math.max(
+        0,
+        Math.min((r * m21 + g * m22 + b * m23 + a * m24 + m25) * 255, 255)
+      );
+      data[index + 2] = Math.max(
+        0,
+        Math.min((r * m31 + g * m32 + b * m33 + a * m34 + m35) * 255, 255)
+      );
+      data[index + 3] = Math.max(
+        0,
+        Math.min((r * m41 + g * m42 + b * m43 + a * m44 + m45) * 255, 255)
+      );
+    }
+
+    self.postMessage({ id: e.data.id, message: imageData }, [
+      imageData.data.buffer
+    ]);
+  };
+};
+
 const getImageSize = (url, cb) => {
   let image = new Image();
   image.onload = () => {
@@ -514,6 +584,19 @@ const cloneCanvas = (origin, target) => {
   return target;
 };
 
+const cloneImageData = imageData => {
+  let id;
+  try {
+    id = new ImageData(imageData.width, imageData.height);
+  } catch (e) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    id = ctx.createImageData(imageData.width, imageData.height);
+  }
+  id.data.set(new Uint8ClampedArray(imageData.data));
+  return id;
+};
+
 const loadImage = url =>
   new Promise((resolve, reject) => {
     const img = new Image();
@@ -532,6 +615,45 @@ const createImageWrapperView = _ => {
   const OverlayView = createImageOverlayView(_);
 
   const ImageView = createImageView(_);
+
+  const { createWorker } = _.utils;
+
+  const applyFilter = (root, filter, target) =>
+    new Promise(resolve => {
+      // will store image data for future filter updates
+      if (!root.ref.imageData) {
+        root.ref.imageData = target
+          .getContext('2d')
+          .getImageData(0, 0, target.width, target.height);
+      }
+
+      // get image data reference
+      const imageData = cloneImageData(root.ref.imageData);
+
+      if (!filter) {
+        target.getContext('2d').putImageData(imageData, 0, 0);
+        return resolve();
+      }
+
+      const worker = createWorker(ColorMatrixWorker);
+      worker.post(
+        {
+          imageData,
+          colorMatrix: filter
+        },
+        response => {
+          // apply filtered colors
+          target.getContext('2d').putImageData(response, 0, 0);
+
+          // stop worker
+          worker.terminate();
+
+          // done!
+          resolve();
+        },
+        [imageData.data.buffer]
+      );
+    });
 
   const removeImageView = (root, imageView) => {
     root.removeChildView(imageView);
@@ -604,24 +726,36 @@ const createImageWrapperView = _ => {
 
   // replace image preview
   const didUpdateItemMetadata = ({ root, props, action }) => {
-    if (action.change.key !== 'crop' || !root.ref.images.length) {
-      return;
-    }
+    // only filter and crop trigger redraw
+    if (!/crop|filter/.test(action.change.key)) return;
 
+    // no images to update, exit
+    if (!root.ref.images.length) return;
+
+    // no item found, exit
     const item = root.query('GET_ITEM', { id: props.id });
     if (!item) return;
 
-    const crop = item.getMetadata('crop');
-    const image = root.ref.images[root.ref.images.length - 1];
-
-    // if aspect ratio has changed, we need to create a new image
-    if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
-      const imageView = shiftImage({ root });
-      pushImage({ root, props, image: cloneCanvas(imageView.image) });
+    // for now, update existing image when filtering
+    if (/filter/.test(action.change.key)) {
+      const imageView = root.ref.images[root.ref.images.length - 1];
+      applyFilter(root, action.change.value, imageView.image);
+      return;
     }
-    // if not, we can update the current image
-    else {
-      updateImage({ root, props });
+
+    if (/crop/.test(action.change.key)) {
+      const crop = item.getMetadata('crop');
+      const image = root.ref.images[root.ref.images.length - 1];
+
+      // if aspect ratio has changed, we need to create a new image
+      if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
+        const imageView = shiftImage({ root });
+        pushImage({ root, props, image: cloneCanvas(imageView.image) });
+      }
+      // if not, we can update the current image
+      else {
+        updateImage({ root, props });
+      }
     }
   };
 
@@ -653,8 +787,6 @@ const createImageWrapperView = _ => {
   };
 
   const drawPreview = ({ root, props }) => {
-    const { utils } = _;
-    const { createWorker } = utils;
     const { id } = props;
 
     // we need to get the file data to determine the eventual image size
@@ -671,7 +803,7 @@ const createImageWrapperView = _ => {
     };
 
     // image is now ready
-    const previewImageLoaded = data => {
+    const previewImageLoaded = imageData => {
       // the file url is no longer needed
       URL.revokeObjectURL(fileURL);
 
@@ -681,7 +813,7 @@ const createImageWrapperView = _ => {
       const orientation = exif.orientation || -1;
 
       // get width and height from action, and swap if orientation is incorrect
-      let { width, height } = data;
+      let { width, height } = imageData;
       if (orientation >= 5 && orientation <= 8) {
         [width, height] = [height, width];
       }
@@ -718,30 +850,41 @@ const createImageWrapperView = _ => {
 
       // transfer to image tag so no canvas memory wasted on iOS
       const previewImage = createPreviewImage(
-        data,
+        imageData,
         imageWidth,
         imageHeight,
         orientation
       );
 
-      // calculate average image color, disabled for now
-      const averageColor = root.query(
-        'GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR'
-      )
-        ? calculateAverageColor(data)
-        : null;
-      item.setMetadata('color', averageColor, true);
+      // done
+      const done = () => {
+        // calculate average image color, disabled for now
+        const averageColor = root.query(
+          'GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR'
+        )
+          ? calculateAverageColor(data)
+          : null;
+        item.setMetadata('color', averageColor, true);
 
-      // data has been transferred to canvas ( if was ImageBitmap )
-      if ('close' in data) {
-        data.close();
+        // data has been transferred to canvas ( if was ImageBitmap )
+        if ('close' in imageData) {
+          imageData.close();
+        }
+
+        // show the overlay
+        root.ref.overlayShadow.opacity = 1;
+
+        // create the first image
+        pushImage({ root, props, image: previewImage });
+      };
+
+      // apply filter
+      const filter = item.getMetadata('filter');
+      if (filter) {
+        applyFilter(root, filter, previewImage).then(done);
+      } else {
+        done();
       }
-
-      // show the overlay
-      root.ref.overlayShadow.opacity = 1;
-
-      // create the first image
-      pushImage({ root, props, image: previewImage });
     };
 
     // if we support scaling using createImageBitmap we use a worker
@@ -811,6 +954,9 @@ const createImageWrapperView = _ => {
   const create = ({ root }) => {
     // image view
     root.ref.images = [];
+
+    // the preview image data (we need this to filter the image)
+    root.ref.imageData = null;
 
     // image bin
     root.ref.imageViewBin = [];
@@ -1020,10 +1166,10 @@ const plugin = fpAPI => {
     };
 
     const didUpdateItemMetadata = ({ root, action }) => {
-      if (action.change.key !== 'crop') return;
-
       // actions in next write operation
-      root.ref.shouldRescale = true;
+      if (/crop/.test(action.change.key)) {
+        root.ref.shouldRescale = true;
+      }
     };
 
     const didCalculatePreviewSize = ({ root, action }) => {

@@ -1,11 +1,13 @@
 import { createImageView } from './createImageView';
 import { createImageOverlayView } from './createImageOverlayView';
 import { BitmapWorker } from '../utils/BitmapWorker';
+import { ColorMatrixWorker } from '../utils/ColorMatrixWorker';
 import { getImageSize } from '../utils/getImageSize';
 import { createPreviewImage } from '../utils/createPreviewImage';
 import { isBitmap } from '../utils/isBitmap';
 import { calculateAverageColor } from '../utils/calculateAverageColor';
 import { cloneCanvas } from '../utils/cloneCanvas';
+import { cloneImageData } from '../utils/cloneImageData';
 
 const loadImage = (url) => new Promise((resolve, reject) => {
     const img = new Image();
@@ -26,6 +28,45 @@ export const createImageWrapperView = _ => {
     const OverlayView = createImageOverlayView(_);
 
     const ImageView = createImageView(_);
+
+    const { createWorker } = _.utils;
+
+    const applyFilter = (root, filter, target) => new Promise(resolve => {
+
+        // will store image data for future filter updates
+        if (!root.ref.imageData) {
+            root.ref.imageData = target.getContext('2d').getImageData(0, 0, target.width, target.height);
+        }
+
+        // get image data reference
+        const imageData = cloneImageData(root.ref.imageData);
+
+        if (!filter) {
+            target.getContext('2d').putImageData(imageData, 0, 0);
+            return resolve();
+        }
+
+        const worker = createWorker(ColorMatrixWorker);
+        worker.post(
+            {
+                imageData,
+                colorMatrix: filter
+            },
+            response => {
+
+                // apply filtered colors
+                target.getContext('2d').putImageData(response, 0, 0);
+
+                // stop worker
+                worker.terminate();
+
+                // done!
+                resolve();
+            },
+            [imageData.data.buffer]
+        );
+        
+    });
 
     const removeImageView = (root, imageView) => {
         root.removeChildView(imageView);
@@ -100,26 +141,38 @@ export const createImageWrapperView = _ => {
     // replace image preview
     const didUpdateItemMetadata = ({ root, props, action }) => {
 
-        if (action.change.key !== 'crop' || !root.ref.images.length) {
-            return;
-       }
+        // only filter and crop trigger redraw
+        if (!/crop|filter/.test(action.change.key)) return;
 
+        // no images to update, exit
+        if (!root.ref.images.length) return;
+
+        // no item found, exit
         const item = root.query('GET_ITEM', { id: props.id });
         if (!item) return;
 
-        const crop = item.getMetadata('crop');
-        const image = root.ref.images[root.ref.images.length-1];
-        
-        // if aspect ratio has changed, we need to create a new image 
-        if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > .00001) {
-            const imageView = shiftImage({ root });
-            pushImage({ root, props, image: cloneCanvas(imageView.image) });
-        }
-        // if not, we can update the current image
-        else {
-            updateImage({ root, props });
+        // for now, update existing image when filtering
+        if (/filter/.test(action.change.key)) {
+            const imageView = root.ref.images[root.ref.images.length-1];
+            applyFilter(root, action.change.value, imageView.image);
+            return;
         }
 
+        if (/crop/.test(action.change.key)) {
+
+            const crop = item.getMetadata('crop');
+            const image = root.ref.images[root.ref.images.length-1];
+            
+            // if aspect ratio has changed, we need to create a new image 
+            if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > .00001) {
+                const imageView = shiftImage({ root });
+                pushImage({ root, props, image: cloneCanvas(imageView.image) });
+            }
+            // if not, we can update the current image
+            else {
+                updateImage({ root, props });
+            }
+        }
     };
 
 
@@ -155,8 +208,6 @@ export const createImageWrapperView = _ => {
 
     const drawPreview = ({ root, props }) => {
 
-        const { utils } = _;
-        const { createWorker } = utils;
         const { id } = props;
 
         // we need to get the file data to determine the eventual image size
@@ -173,7 +224,7 @@ export const createImageWrapperView = _ => {
         };
 
         // image is now ready
-        const previewImageLoaded = data => {
+        const previewImageLoaded = imageData => {
 
             // the file url is no longer needed
             URL.revokeObjectURL(fileURL);
@@ -184,7 +235,7 @@ export const createImageWrapperView = _ => {
             const orientation = exif.orientation || -1; 
 
             // get width and height from action, and swap if orientation is incorrect
-            let { width, height } = data;
+            let { width, height } = imageData;
             if (orientation >= 5 && orientation <= 8) {
                 [width, height] = [height, width];
             }
@@ -221,22 +272,36 @@ export const createImageWrapperView = _ => {
             }
 
             // transfer to image tag so no canvas memory wasted on iOS
-            const previewImage = createPreviewImage(data, imageWidth, imageHeight, orientation);
+            const previewImage = createPreviewImage(imageData, imageWidth, imageHeight, orientation);
 
-            // calculate average image color, disabled for now
-            const averageColor = root.query('GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR') ? calculateAverageColor(data) : null;
-            item.setMetadata('color', averageColor, true);
+            // done
+            const done = () => {
 
-            // data has been transferred to canvas ( if was ImageBitmap )
-            if ('close' in data) {
-                data.close();
+                // calculate average image color, disabled for now
+                const averageColor = root.query('GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR') ? calculateAverageColor(data) : null;
+                item.setMetadata('color', averageColor, true);
+
+                // data has been transferred to canvas ( if was ImageBitmap )
+                if ('close' in imageData) {
+                    imageData.close();
+                }
+
+                // show the overlay
+                root.ref.overlayShadow.opacity = 1;
+
+                // create the first image
+                pushImage({ root, props, image: previewImage });
             }
 
-            // show the overlay
-            root.ref.overlayShadow.opacity = 1;
+            // apply filter
+            const filter = item.getMetadata('filter');
+            if (filter) {
+                applyFilter(root, filter, previewImage).then(done);
+            }
+            else {
+                done();
+            }
 
-            // create the first image
-            pushImage({ root, props, image: previewImage });
         };
 
         // if we support scaling using createImageBitmap we use a worker
@@ -310,6 +375,9 @@ export const createImageWrapperView = _ => {
         
         // image view
         root.ref.images = [];
+
+        // the preview image data (we need this to filter the image)
+        root.ref.imageData = null;
 
         // image bin
         root.ref.imageViewBin = [];

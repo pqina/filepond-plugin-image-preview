@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.1.1
+ * FilePondPluginImagePreview 4.2.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -456,6 +456,76 @@
     };
   };
 
+  /**
+   * ColorMatrix Worker
+   */
+  var ColorMatrixWorker = function ColorMatrixWorker() {
+    self.onmessage = function(e) {
+      var imageData = e.data.message.imageData;
+      var matrix = e.data.message.colorMatrix;
+
+      var data = imageData.data;
+      var l = data.length;
+
+      var m11 = matrix[0];
+      var m12 = matrix[1];
+      var m13 = matrix[2];
+      var m14 = matrix[3];
+      var m15 = matrix[4];
+
+      var m21 = matrix[5];
+      var m22 = matrix[6];
+      var m23 = matrix[7];
+      var m24 = matrix[8];
+      var m25 = matrix[9];
+
+      var m31 = matrix[10];
+      var m32 = matrix[11];
+      var m33 = matrix[12];
+      var m34 = matrix[13];
+      var m35 = matrix[14];
+
+      var m41 = matrix[15];
+      var m42 = matrix[16];
+      var m43 = matrix[17];
+      var m44 = matrix[18];
+      var m45 = matrix[19];
+
+      var index = 0,
+        r = 0.0,
+        g = 0.0,
+        b = 0.0,
+        a = 0.0;
+
+      for (; index < l; index += 4) {
+        r = data[index] / 255;
+        g = data[index + 1] / 255;
+        b = data[index + 2] / 255;
+        a = data[index + 3] / 255;
+        data[index] = Math.max(
+          0,
+          Math.min((r * m11 + g * m12 + b * m13 + a * m14 + m15) * 255, 255)
+        );
+        data[index + 1] = Math.max(
+          0,
+          Math.min((r * m21 + g * m22 + b * m23 + a * m24 + m25) * 255, 255)
+        );
+        data[index + 2] = Math.max(
+          0,
+          Math.min((r * m31 + g * m32 + b * m33 + a * m34 + m35) * 255, 255)
+        );
+        data[index + 3] = Math.max(
+          0,
+          Math.min((r * m41 + g * m42 + b * m43 + a * m44 + m45) * 255, 255)
+        );
+      }
+
+      self.postMessage({ id: e.data.id, message: imageData }, [
+        imageData.data.buffer
+      ]);
+    };
+  };
+
   var getImageSize = function getImageSize(url, cb) {
     var image = new Image();
     image.onload = function() {
@@ -595,6 +665,19 @@
     return target;
   };
 
+  var cloneImageData = function cloneImageData(imageData) {
+    var id;
+    try {
+      id = new ImageData(imageData.width, imageData.height);
+    } catch (e) {
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext('2d');
+      id = ctx.createImageData(imageData.width, imageData.height);
+    }
+    id.data.set(new Uint8ClampedArray(imageData.data));
+    return id;
+  };
+
   var loadImage = function loadImage(url) {
     return new Promise(function(resolve, reject) {
       var img = new Image();
@@ -614,6 +697,46 @@
     var OverlayView = createImageOverlayView(_);
 
     var ImageView = createImageView(_);
+    var createWorker = _.utils.createWorker;
+
+    var applyFilter = function applyFilter(root, filter, target) {
+      return new Promise(function(resolve) {
+        // will store image data for future filter updates
+        if (!root.ref.imageData) {
+          root.ref.imageData = target
+            .getContext('2d')
+            .getImageData(0, 0, target.width, target.height);
+        }
+
+        // get image data reference
+        var imageData = cloneImageData(root.ref.imageData);
+
+        if (!filter) {
+          target.getContext('2d').putImageData(imageData, 0, 0);
+          return resolve();
+        }
+
+        var worker = createWorker(ColorMatrixWorker);
+        worker.post(
+          {
+            imageData: imageData,
+            colorMatrix: filter
+          },
+
+          function(response) {
+            // apply filtered colors
+            target.getContext('2d').putImageData(response, 0, 0);
+
+            // stop worker
+            worker.terminate();
+
+            // done!
+            resolve();
+          },
+          [imageData.data.buffer]
+        );
+      });
+    };
 
     var removeImageView = function removeImageView(root, imageView) {
       root.removeChildView(imageView);
@@ -701,28 +824,40 @@
         props = _ref4.props,
         action = _ref4.action;
 
-      if (action.change.key !== 'crop' || !root.ref.images.length) {
-        return;
-      }
+      // only filter and crop trigger redraw
+      if (!/crop|filter/.test(action.change.key)) return;
 
+      // no images to update, exit
+      if (!root.ref.images.length) return;
+
+      // no item found, exit
       var item = root.query('GET_ITEM', { id: props.id });
       if (!item) return;
 
-      var crop = item.getMetadata('crop');
-      var image = root.ref.images[root.ref.images.length - 1];
-
-      // if aspect ratio has changed, we need to create a new image
-      if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
-        var imageView = shiftImage({ root: root });
-        pushImage({
-          root: root,
-          props: props,
-          image: cloneCanvas(imageView.image)
-        });
+      // for now, update existing image when filtering
+      if (/filter/.test(action.change.key)) {
+        var imageView = root.ref.images[root.ref.images.length - 1];
+        applyFilter(root, action.change.value, imageView.image);
+        return;
       }
-      // if not, we can update the current image
-      else {
-        updateImage({ root: root, props: props });
+
+      if (/crop/.test(action.change.key)) {
+        var crop = item.getMetadata('crop');
+        var image = root.ref.images[root.ref.images.length - 1];
+
+        // if aspect ratio has changed, we need to create a new image
+        if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
+          var _imageView = shiftImage({ root: root });
+          pushImage({
+            root: root,
+            props: props,
+            image: cloneCanvas(_imageView.image)
+          });
+        }
+        // if not, we can update the current image
+        else {
+          updateImage({ root: root, props: props });
+        }
       }
     };
 
@@ -759,8 +894,6 @@
     var drawPreview = function drawPreview(_ref6) {
       var root = _ref6.root,
         props = _ref6.props;
-      var utils = _.utils;
-      var createWorker = utils.createWorker;
       var id = props.id;
 
       // we need to get the file data to determine the eventual image size
@@ -777,7 +910,7 @@
       };
 
       // image is now ready
-      var previewImageLoaded = function previewImageLoaded(data) {
+      var previewImageLoaded = function previewImageLoaded(imageData) {
         // the file url is no longer needed
         URL.revokeObjectURL(fileURL);
 
@@ -787,8 +920,8 @@
         var orientation = exif.orientation || -1;
 
         // get width and height from action, and swap if orientation is incorrect
-        var width = data.width,
-          height = data.height;
+        var width = imageData.width,
+          height = imageData.height;
         if (orientation >= 5 && orientation <= 8) {
           var _ref7 = [height, width];
           width = _ref7[0];
@@ -827,30 +960,41 @@
 
         // transfer to image tag so no canvas memory wasted on iOS
         var previewImage = createPreviewImage(
-          data,
+          imageData,
           imageWidth,
           imageHeight,
           orientation
         );
 
-        // calculate average image color, disabled for now
-        var averageColor = root.query(
-          'GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR'
-        )
-          ? calculateAverageColor(data)
-          : null;
-        item.setMetadata('color', averageColor, true);
+        // done
+        var done = function done() {
+          // calculate average image color, disabled for now
+          var averageColor = root.query(
+            'GET_IMAGE_PREVIEW_CALCULATE_AVERAGE_IMAGE_COLOR'
+          )
+            ? calculateAverageColor(data)
+            : null;
+          item.setMetadata('color', averageColor, true);
 
-        // data has been transferred to canvas ( if was ImageBitmap )
-        if ('close' in data) {
-          data.close();
+          // data has been transferred to canvas ( if was ImageBitmap )
+          if ('close' in imageData) {
+            imageData.close();
+          }
+
+          // show the overlay
+          root.ref.overlayShadow.opacity = 1;
+
+          // create the first image
+          pushImage({ root: root, props: props, image: previewImage });
+        };
+
+        // apply filter
+        var filter = item.getMetadata('filter');
+        if (filter) {
+          applyFilter(root, filter, previewImage).then(done);
+        } else {
+          done();
         }
-
-        // show the overlay
-        root.ref.overlayShadow.opacity = 1;
-
-        // create the first image
-        pushImage({ root: root, props: props, image: previewImage });
       };
 
       // if we support scaling using createImageBitmap we use a worker
@@ -927,6 +1071,9 @@
 
       // image view
       root.ref.images = [];
+
+      // the preview image data (we need this to filter the image)
+      root.ref.imageData = null;
 
       // image bin
       root.ref.imageViewBin = [];
