@@ -41,7 +41,7 @@ export const createImageWrapperView = _ => {
         // get image data reference
         const imageData = cloneImageData(root.ref.imageData);
 
-        if (!filter) {
+        if (!filter || filter.length !== 20) {
             target.getContext('2d').putImageData(imageData, 0, 0);
             return resolve();
         }

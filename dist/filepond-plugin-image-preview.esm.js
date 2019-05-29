@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.2.0
+ * FilePondPluginImagePreview 4.2.1
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -630,7 +630,7 @@ const createImageWrapperView = _ => {
       // get image data reference
       const imageData = cloneImageData(root.ref.imageData);
 
-      if (!filter) {
+      if (!filter || filter.length !== 20) {
         target.getContext('2d').putImageData(imageData, 0, 0);
         return resolve();
       }
