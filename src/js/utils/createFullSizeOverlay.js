@@ -18,7 +18,7 @@ export const createFullSizeOverlay = (imageCanvas) => {
     let imageUrl = imageCanvas.toDataURL();
 
     const overlay = document.createElement('div');
-    overlay.className = 'fullsize-overlay';
+    overlay.className = 'filepond--fullsize-overlay';
 
     const imgContainer = document.createElement('div');
     imgContainer.className = 'image-container';

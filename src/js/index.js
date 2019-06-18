@@ -184,7 +184,7 @@ const plugin = fpAPI => {
             allowImagePreview: [true, Type.BOOLEAN],
 
             // Enable or disable full size overlay
-            allowFullSizeOverlay: [false, Type.BOOLEAN],
+            allowImagePreviewFullSizeOverlay: [false, Type.BOOLEAN],
 
             // Fixed preview height
             imagePreviewHeight: [null, Type.INT],

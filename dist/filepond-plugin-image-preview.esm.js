@@ -617,7 +617,7 @@ const createFullSizeOverlay = imageCanvas => {
   let imageUrl = imageCanvas.toDataURL();
 
   const overlay = document.createElement('div');
-  overlay.className = 'fullsize-overlay';
+  overlay.className = 'filepond--fullsize-overlay';
 
   const imgContainer = document.createElement('div');
   imgContainer.className = 'image-container';
@@ -752,7 +752,9 @@ const createImageWrapperView = _ => {
       root.dispatch('DID_IMAGE_PREVIEW_SHOW', { id });
 
       // in case full size overlay is allowed, register it
-      const allowFullSizeOverlay = root.query('GET_ALLOW_FULL_SIZE_OVERLAY');
+      const allowFullSizeOverlay = root.query(
+        'GET_ALLOW_IMAGE_PREVIEW_FULL_SIZE_OVERLAY'
+      );
       if (allowFullSizeOverlay) {
         registerFullSizeOverlay(image);
       }
@@ -1268,7 +1270,7 @@ const plugin = fpAPI => {
       allowImagePreview: [true, Type.BOOLEAN],
 
       // Enable or disable full size overlay
-      allowFullSizeOverlay: [false, Type.BOOLEAN],
+      allowImagePreviewFullSizeOverlay: [false, Type.BOOLEAN],
 
       // Fixed preview height
       imagePreviewHeight: [null, Type.INT],

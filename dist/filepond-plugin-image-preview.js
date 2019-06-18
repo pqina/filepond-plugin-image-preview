@@ -698,7 +698,7 @@
     var imageUrl = imageCanvas.toDataURL();
 
     var overlay = document.createElement('div');
-    overlay.className = 'fullsize-overlay';
+    overlay.className = 'filepond--fullsize-overlay';
 
     var imgContainer = document.createElement('div');
     imgContainer.className = 'image-container';
@@ -844,7 +844,9 @@
         root.dispatch('DID_IMAGE_PREVIEW_SHOW', { id: id });
 
         // in case full size overlay is allowed, register it
-        var allowFullSizeOverlay = root.query('GET_ALLOW_FULL_SIZE_OVERLAY');
+        var allowFullSizeOverlay = root.query(
+          'GET_ALLOW_IMAGE_PREVIEW_FULL_SIZE_OVERLAY'
+        );
         if (allowFullSizeOverlay) {
           registerFullSizeOverlay(image);
         }
@@ -1416,7 +1418,7 @@
         allowImagePreview: [true, Type.BOOLEAN],
 
         // Enable or disable full size overlay
-        allowFullSizeOverlay: [false, Type.BOOLEAN],
+        allowImagePreviewFullSizeOverlay: [false, Type.BOOLEAN],
 
         // Fixed preview height
         imagePreviewHeight: [null, Type.INT],
