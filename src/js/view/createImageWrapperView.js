@@ -8,6 +8,7 @@ import { isBitmap } from '../utils/isBitmap';
 import { calculateAverageColor } from '../utils/calculateAverageColor';
 import { cloneCanvas } from '../utils/cloneCanvas';
 import { cloneImageData } from '../utils/cloneImageData';
+import { registerFullSizeOverlay } from "../utils/createFullSizeOverlay";
 
 const loadImage = (url) => new Promise((resolve, reject) => {
     const img = new Image();
@@ -128,6 +129,12 @@ export const createImageWrapperView = _ => {
         // the preview is now ready to be drawn
         setTimeout(() => {
             root.dispatch('DID_IMAGE_PREVIEW_SHOW', { id });
+
+            // in case full size overlay is allowed, register it
+            const allowFullSizeOverlay = root.query('GET_ALLOW_FULL_SIZE_OVERLAY');
+            if (allowFullSizeOverlay) {
+                registerFullSizeOverlay(image);
+            }
         }, 250);
     }
 

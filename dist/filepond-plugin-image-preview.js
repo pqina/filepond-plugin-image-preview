@@ -678,6 +678,42 @@
     return id;
   };
 
+  /**
+   * Register the full size overlay so that it will be instantiated upon clicking the image preview wrapper
+   * @param imageCanvas
+   */
+  var registerFullSizeOverlay = function registerFullSizeOverlay(imageCanvas) {
+    var wrapper = imageCanvas.closest('.filepond--image-preview-wrapper');
+    wrapper.style.cursor = 'zoom-in';
+    wrapper.addEventListener('click', function() {
+      createFullSizeOverlay(imageCanvas);
+    });
+  };
+
+  /**
+   * Generate the full size overlay and present the image in it.
+   * @param imageCanvas the preview canvas to read the image data url from
+   */
+  var createFullSizeOverlay = function createFullSizeOverlay(imageCanvas) {
+    var imageUrl = imageCanvas.toDataURL();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'fullsize-overlay';
+
+    var imgContainer = document.createElement('div');
+    imgContainer.className = 'image-container';
+    imgContainer.style.backgroundImage = 'url(' + imageUrl + ')';
+
+    var body = document.getElementsByTagName('body')[0];
+    overlay.appendChild(imgContainer);
+    body.appendChild(overlay);
+    overlay.classList.add('visible');
+
+    overlay.addEventListener('click', function() {
+      overlay.remove();
+    });
+  };
+
   var loadImage = function loadImage(url) {
     return new Promise(function(resolve, reject) {
       var img = new Image();
@@ -806,6 +842,12 @@
       // the preview is now ready to be drawn
       setTimeout(function() {
         root.dispatch('DID_IMAGE_PREVIEW_SHOW', { id: id });
+
+        // in case full size overlay is allowed, register it
+        var allowFullSizeOverlay = root.query('GET_ALLOW_FULL_SIZE_OVERLAY');
+        if (allowFullSizeOverlay) {
+          registerFullSizeOverlay(image);
+        }
       }, 250);
     };
 
@@ -1372,6 +1414,9 @@
       options: {
         // Enable or disable image preview
         allowImagePreview: [true, Type.BOOLEAN],
+
+        // Enable or disable full size overlay
+        allowFullSizeOverlay: [false, Type.BOOLEAN],
 
         // Fixed preview height
         imagePreviewHeight: [null, Type.INT],

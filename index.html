@@ -6,10 +6,17 @@
     <title>FilePond Plugin Image Preview Demo</title>
     <link href="https://unpkg.com/filepond/dist/filepond.css" rel="stylesheet">
     <link href="./dist/filepond-plugin-image-preview.css" rel="stylesheet">
+    <style>
+        /* Demo styling */
+        label {
+            font-family: Helvetica;
+        }
+    </style>
 </head>
 <body>
 
-    <input type="file"/>
+    <label>Default</label><input type="file" class="default" multiple="true"/>
+    <label>With full size overlay</label><input type="file" class="withoverlay" multiple="true"/>
     
     <script src="./dist/filepond-plugin-image-preview.js"></script>
     <script src="https://unpkg.com/filepond/dist/filepond.js"></script>
@@ -18,11 +25,13 @@
         // Register the plugin with FilePond
         FilePond.registerPlugin(FilePondPluginImagePreview);
 
-        // Get a reference to the file input element
-        const inputElement = document.querySelector('input[type="file"]');
+        // Get a reference to the file input elements
+        const inputElement = document.querySelector('input[type="file"].default');
+        const inputElementOverlay = document.querySelector('input[type="file"].withoverlay');
 
-        // Create the FilePond instance
+        // Create the FilePond instances
         const pond = FilePond.create(inputElement);
+        const pondOverlay = FilePond.create(inputElementOverlay, { allowFullSizeOverlay: true});
     </script>
 
 </body>

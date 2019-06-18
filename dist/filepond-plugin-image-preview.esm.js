@@ -597,6 +597,42 @@ const cloneImageData = imageData => {
   return id;
 };
 
+/**
+ * Register the full size overlay so that it will be instantiated upon clicking the image preview wrapper
+ * @param imageCanvas
+ */
+const registerFullSizeOverlay = imageCanvas => {
+  let wrapper = imageCanvas.closest('.filepond--image-preview-wrapper');
+  wrapper.style.cursor = 'zoom-in';
+  wrapper.addEventListener('click', () => {
+    createFullSizeOverlay(imageCanvas);
+  });
+};
+
+/**
+ * Generate the full size overlay and present the image in it.
+ * @param imageCanvas the preview canvas to read the image data url from
+ */
+const createFullSizeOverlay = imageCanvas => {
+  let imageUrl = imageCanvas.toDataURL();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'fullsize-overlay';
+
+  const imgContainer = document.createElement('div');
+  imgContainer.className = 'image-container';
+  imgContainer.style.backgroundImage = 'url(' + imageUrl + ')';
+
+  let body = document.getElementsByTagName('body')[0];
+  overlay.appendChild(imgContainer);
+  body.appendChild(overlay);
+  overlay.classList.add('visible');
+
+  overlay.addEventListener('click', () => {
+    overlay.remove();
+  });
+};
+
 const loadImage = url =>
   new Promise((resolve, reject) => {
     const img = new Image();
@@ -714,6 +750,12 @@ const createImageWrapperView = _ => {
     // the preview is now ready to be drawn
     setTimeout(() => {
       root.dispatch('DID_IMAGE_PREVIEW_SHOW', { id });
+
+      // in case full size overlay is allowed, register it
+      const allowFullSizeOverlay = root.query('GET_ALLOW_FULL_SIZE_OVERLAY');
+      if (allowFullSizeOverlay) {
+        registerFullSizeOverlay(image);
+      }
     }, 250);
   };
 
@@ -1224,6 +1266,9 @@ const plugin = fpAPI => {
     options: {
       // Enable or disable image preview
       allowImagePreview: [true, Type.BOOLEAN],
+
+      // Enable or disable full size overlay
+      allowFullSizeOverlay: [false, Type.BOOLEAN],
 
       // Fixed preview height
       imagePreviewHeight: [null, Type.INT],

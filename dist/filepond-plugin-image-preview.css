@@ -5,6 +5,27 @@
  */
 
 /* eslint-disable */
+.fullsize-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2em;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+.fullsize-overlay .image-container {
+  width: 100%;
+  height: 100%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center center;
+  cursor: -webkit-zoom-out;
+  cursor: zoom-out;
+  transition: background-image 0.5s ease-in-out;
+}
+
 .filepond--image-preview-wrapper {
   z-index: 2;
 }
