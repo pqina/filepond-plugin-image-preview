@@ -133,7 +133,7 @@ export const createImageWrapperView = _ => {
             // in case full size overlay is allowed, register it
             const allowFullSizeOverlay = root.query('GET_ALLOW_IMAGE_PREVIEW_FULL_SIZE_OVERLAY');
             if (allowFullSizeOverlay) {
-                registerFullSizeOverlay(image);
+                registerFullSizeOverlay(item, image);
             }
         }, 250);
     }

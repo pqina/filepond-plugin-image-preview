@@ -601,11 +601,11 @@ const cloneImageData = imageData => {
  * Register the full size overlay so that it will be instantiated upon clicking the image preview wrapper
  * @param imageCanvas
  */
-const registerFullSizeOverlay = imageCanvas => {
+const registerFullSizeOverlay = (item, imageCanvas) => {
   let wrapper = imageCanvas.closest('.filepond--image-preview-wrapper');
   wrapper.style.cursor = 'zoom-in';
   wrapper.addEventListener('click', () => {
-    createFullSizeOverlay(imageCanvas);
+    createFullSizeOverlay(item, imageCanvas);
   });
 };
 
@@ -613,7 +613,7 @@ const registerFullSizeOverlay = imageCanvas => {
  * Generate the full size overlay and present the image in it.
  * @param imageCanvas the preview canvas to read the image data url from
  */
-const createFullSizeOverlay = imageCanvas => {
+const createFullSizeOverlay = (item, imageCanvas) => {
   let imageUrl = imageCanvas.toDataURL();
 
   const overlay = document.createElement('div');
@@ -623,13 +623,37 @@ const createFullSizeOverlay = imageCanvas => {
   imgContainer.className = 'image-container';
   imgContainer.style.backgroundImage = 'url(' + imageUrl + ')';
 
+  determineImageOverlaySize(item, imageCanvas, imgContainer);
+
   let body = document.getElementsByTagName('body')[0];
   overlay.appendChild(imgContainer);
   body.appendChild(overlay);
-  overlay.classList.add('visible');
 
   overlay.addEventListener('click', () => {
     overlay.remove();
+  });
+};
+
+const determineImageOverlaySize = (item, imgCanvas, imgContainer) => {
+  let w = Math.max(
+    document.documentElement.clientWidth,
+    window.innerWidth || 0
+  );
+  let h = Math.max(
+    document.documentElement.clientHeight,
+    window.innerHeight || 0
+  );
+  console.log('w', w, 'h', h);
+
+  const fileURL = URL.createObjectURL(item.file);
+  getImageSize(fileURL, (width, height) => {
+    if (width > w || height > h) {
+      console.log('too big image');
+      imgContainer.style.backgroundSize = 'contain';
+    } else {
+      console.log('no big image');
+    }
+    console.log('image size w', width, 'and height', height);
   });
 };
 
@@ -756,7 +780,7 @@ const createImageWrapperView = _ => {
         'GET_ALLOW_IMAGE_PREVIEW_FULL_SIZE_OVERLAY'
       );
       if (allowFullSizeOverlay) {
-        registerFullSizeOverlay(image);
+        registerFullSizeOverlay(item, image);
       }
     }, 250);
   };
