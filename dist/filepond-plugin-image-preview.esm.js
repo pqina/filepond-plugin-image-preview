@@ -599,7 +599,6 @@ const cloneImageData = imageData => {
 
 /**
  * Register the full size overlay so that it will be instantiated upon clicking the image preview wrapper
- * @param imageCanvas
  */
 const registerFullSizeOverlay = (item, imageCanvas) => {
   let wrapper = imageCanvas.closest('.filepond--image-preview-wrapper');
@@ -611,7 +610,6 @@ const registerFullSizeOverlay = (item, imageCanvas) => {
 
 /**
  * Generate the full size overlay and present the image in it.
- * @param imageCanvas the preview canvas to read the image data url from
  */
 const createFullSizeOverlay = (item, imageCanvas) => {
   let imageUrl = imageCanvas.toDataURL();
@@ -634,26 +632,25 @@ const createFullSizeOverlay = (item, imageCanvas) => {
   });
 };
 
+/**
+ * Determines whether the image is larger than the viewport.
+ * If so, set the backgroundSize to 'contain' to scale down the image so it fits the overlay.
+ */
 const determineImageOverlaySize = (item, imgCanvas, imgContainer) => {
-  let w = Math.max(
-    document.documentElement.clientWidth,
-    window.innerWidth || 0
-  );
-  let h = Math.max(
-    document.documentElement.clientHeight,
-    window.innerHeight || 0
-  );
-  console.log('w', w, 'h', h);
+  const w = Math.max(
+      document.documentElement.clientWidth,
+      window.innerWidth || 0
+    ),
+    h = Math.max(
+      document.documentElement.clientHeight,
+      window.innerHeight || 0
+    ),
+    fileURL = URL.createObjectURL(item.file);
 
-  const fileURL = URL.createObjectURL(item.file);
   getImageSize(fileURL, (width, height) => {
     if (width > w || height > h) {
-      console.log('too big image');
       imgContainer.style.backgroundSize = 'contain';
-    } else {
-      console.log('no big image');
     }
-    console.log('image size w', width, 'and height', height);
   });
 };
 
