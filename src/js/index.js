@@ -208,7 +208,13 @@ const plugin = fpAPI => {
             imagePreviewTransparencyIndicator: [null, Type.STRING],
 
             // Enables or disables reading average image color
-            imagePreviewCalculateAverageImageColor: [false, Type.BOOLEAN]
+            imagePreviewCalculateAverageImageColor: [false, Type.BOOLEAN],
+
+            // Enables or disables the previewing of markup
+            imagePreviewMarkupShow: [true, Type.BOOLEAN],
+
+            // Allows filtering of markup to only show certain shapes
+            imagePreviewMarkupFilter: [() => true, Type.FUNCTION]
         }
     };
 };

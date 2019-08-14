@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.2.1
+ * FilePondPluginImagePreview 4.3.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -9,18 +9,414 @@
 // test if file is of type image and can be viewed in canvas
 const isPreviewableImage = file => /^image/.test(file.type);
 
-const IMAGE_SCALE_SPRING_PROPS = {
-  type: 'spring',
-  stiffness: 0.5,
-  damping: 0.45,
-  mass: 10
+const vectorMultiply = (v, amount) => createVector(v.x * amount, v.y * amount);
+
+const vectorAdd = (a, b) => createVector(a.x + b.x, a.y + b.y);
+
+const vectorNormalize = v => {
+  const l = Math.sqrt(v.x * v.x + v.y * v.y);
+  if (l === 0) {
+    return {
+      x: 0,
+      y: 0
+    };
+  }
+  return createVector(v.x / l, v.y / l);
 };
 
-const createVector = (x, y) => ({ x, y });
+const vectorRotate = (v, radians, origin) => {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const t = createVector(v.x - origin.x, v.y - origin.y);
+  return createVector(
+    origin.x + cos * t.x - sin * t.y,
+    origin.y + sin * t.x + cos * t.y
+  );
+};
+
+const createVector = (x = 0, y = 0) => ({ x, y });
+
+const getMarkupValue = (value, size, scalar = 1, axis) => {
+  if (typeof value === 'string') {
+    return parseFloat(value) * scalar;
+  }
+  if (typeof value === 'number') {
+    return value * (axis ? size[axis] : Math.min(size.width, size.height));
+  }
+  return;
+};
+
+const getMarkupStyles = (markup, size, scale) => {
+  const lineStyle = markup.borderStyle || markup.lineStyle || 'solid';
+  const fill = markup.backgroundColor || markup.fontColor || 'transparent';
+  const stroke = markup.borderColor || markup.lineColor || 'transparent';
+  const strokeWidth = getMarkupValue(
+    markup.borderWidth || markup.lineWidth,
+    size,
+    scale
+  );
+  const lineCap = markup.lineCap || 'round';
+  const lineJoin = markup.lineJoin || 'round';
+  const dashes =
+    typeof lineStyle === 'string'
+      ? ''
+      : lineStyle.map(v => getMarkupValue(v, size, scale)).join(',');
+  const opacity = markup.opacity || 1;
+  return {
+    'stroke-linecap': lineCap,
+    'stroke-linejoin': lineJoin,
+    'stroke-width': strokeWidth || 0,
+    'stroke-dasharray': dashes,
+    stroke,
+    fill,
+    opacity
+  };
+};
+
+const isDefined = value => value != null;
+
+const getMarkupRect = (rect, size, scalar = 1) => {
+  let left =
+    getMarkupValue(rect.x, size, scalar, 'width') ||
+    getMarkupValue(rect.left, size, scalar, 'width');
+  let top =
+    getMarkupValue(rect.y, size, scalar, 'height') ||
+    getMarkupValue(rect.top, size, scalar, 'height');
+  let width = getMarkupValue(rect.width, size, scalar, 'width');
+  let height = getMarkupValue(rect.height, size, scalar, 'height');
+  let right = getMarkupValue(rect.right, size, scalar, 'width');
+  let bottom = getMarkupValue(rect.bottom, size, scalar, 'height');
+
+  if (!isDefined(top)) {
+    if (isDefined(height) && isDefined(bottom)) {
+      top = size.height - height - bottom;
+    } else {
+      top = bottom;
+    }
+  }
+
+  if (!isDefined(left)) {
+    if (isDefined(width) && isDefined(right)) {
+      left = size.width - width - right;
+    } else {
+      left = right;
+    }
+  }
+
+  if (!isDefined(width)) {
+    if (isDefined(left) && isDefined(right)) {
+      width = size.width - left - right;
+    } else {
+      width = 0;
+    }
+  }
+
+  if (!isDefined(height)) {
+    if (isDefined(top) && isDefined(bottom)) {
+      height = size.height - top - bottom;
+    } else {
+      height = 0;
+    }
+  }
+
+  return {
+    x: left || 0,
+    y: top || 0,
+    width: width || 0,
+    height: height || 0
+  };
+};
+
+const setAttributes = (element, attr) =>
+  Object.keys(attr).forEach(key => element.setAttribute(key, attr[key]));
+
+const ns = 'http://www.w3.org/2000/svg';
+const svg = (tag, attr) => {
+  const element = document.createElementNS(ns, tag);
+  if (attr) {
+    setAttributes(element, attr);
+  }
+  return element;
+};
+
+const updateRect = element =>
+  setAttributes(element, {
+    ...element.rect,
+    ...element.styles
+  });
+
+const updateEllipse = element => {
+  const cx = element.rect.x + element.rect.width * 0.5;
+  const cy = element.rect.y + element.rect.height * 0.5;
+  const rx = element.rect.width * 0.5;
+  const ry = element.rect.height * 0.5;
+  return setAttributes(element, {
+    cx,
+    cy,
+    rx,
+    ry,
+    ...element.styles
+  });
+};
+
+const IMAGE_FIT_STYLE = {
+  contain: 'xMidYMid meet',
+  cover: 'xMidYMid slice'
+};
+
+const updateImage = (element, markup) => {
+  setAttributes(element, {
+    ...element.rect,
+    ...element.styles,
+    preserveAspectRatio: IMAGE_FIT_STYLE[markup.fit] || 'none'
+  });
+};
+
+const TEXT_ANCHOR = {
+  left: 'start',
+  center: 'middle',
+  right: 'end'
+};
+
+const updateText = (element, markup, size, scale) => {
+  const fontSize = getMarkupValue(markup.fontSize, size, scale);
+  const fontFamily = markup.fontFamily || 'sans-serif';
+  const fontWeight = markup.fontWeight || 'normal';
+  const textAlign = TEXT_ANCHOR[markup.textAlign] || 'start';
+
+  setAttributes(element, {
+    ...element.rect,
+    ...element.styles,
+    'stroke-width': 0,
+    'font-weight': fontWeight,
+    'font-size': fontSize,
+    'font-family': fontFamily,
+    'text-anchor': textAlign
+  });
+
+  // update text
+  if (element.text !== markup.text) {
+    element.text = markup.text;
+    element.textContent = markup.text.length ? markup.text : ' ';
+  }
+};
+
+const updateLine = (element, markup, size, scale) => {
+  setAttributes(element, {
+    ...element.rect,
+    ...element.styles,
+    fill: 'none'
+  });
+
+  const line = element.childNodes[0];
+  const begin = element.childNodes[1];
+  const end = element.childNodes[2];
+
+  const origin = element.rect;
+
+  const target = {
+    x: element.rect.x + element.rect.width,
+    y: element.rect.y + element.rect.height
+  };
+
+  setAttributes(line, {
+    x1: origin.x,
+    y1: origin.y,
+    x2: target.x,
+    y2: target.y
+  });
+
+  if (!markup.lineDecoration) return;
+
+  begin.style.display = 'none';
+  end.style.display = 'none';
+
+  const v = vectorNormalize({
+    x: target.x - origin.x,
+    y: target.y - origin.y
+  });
+
+  const l = getMarkupValue(0.05, size, scale);
+
+  if (markup.lineDecoration.indexOf('arrow-begin') !== -1) {
+    const arrowBeginRotationPoint = vectorMultiply(v, l);
+    const arrowBeginCenter = vectorAdd(origin, arrowBeginRotationPoint);
+    const arrowBeginA = vectorRotate(origin, 2, arrowBeginCenter);
+    const arrowBeginB = vectorRotate(origin, -2, arrowBeginCenter);
+
+    setAttributes(begin, {
+      style: 'display:block;',
+      d: `M${arrowBeginA.x},${arrowBeginA.y} L${origin.x},${origin.y} L${
+        arrowBeginB.x
+      },${arrowBeginB.y}`
+    });
+  }
+
+  if (markup.lineDecoration.indexOf('arrow-end') !== -1) {
+    const arrowEndRotationPoint = vectorMultiply(v, -l);
+    const arrowEndCenter = vectorAdd(target, arrowEndRotationPoint);
+    const arrowEndA = vectorRotate(target, 2, arrowEndCenter);
+    const arrowEndB = vectorRotate(target, -2, arrowEndCenter);
+
+    setAttributes(end, {
+      style: 'display:block;',
+      d: `M${arrowEndA.x},${arrowEndA.y} L${target.x},${target.y} L${
+        arrowEndB.x
+      },${arrowEndB.y}`
+    });
+  }
+};
+
+const createShape = node => markup => svg(node);
+
+const createImage = markup => {
+  const shape = svg('image', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    opacity: '0'
+  });
+  shape.onload = () => {
+    shape.setAttribute('opacity', markup.opacity || 1);
+  };
+  shape.setAttributeNS(
+    'http://www.w3.org/1999/xlink',
+    'xlink:href',
+    markup.src
+  );
+  return shape;
+};
+
+const createLine = markup => {
+  const shape = svg('g', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round'
+  });
+
+  const line = svg('line');
+  shape.appendChild(line);
+
+  const begin = svg('path');
+  shape.appendChild(begin);
+
+  const end = svg('path');
+  shape.appendChild(end);
+
+  return shape;
+};
+
+const CREATE_TYPE_ROUTES = {
+  image: createImage,
+  rect: createShape('rect'),
+  ellipse: createShape('ellipse'),
+  text: createShape('text'),
+  line: createLine
+};
+
+const UPDATE_TYPE_ROUTES = {
+  rect: updateRect,
+  ellipse: updateEllipse,
+  image: updateImage,
+  text: updateText,
+  line: updateLine
+};
+
+const createMarkupByType = (type, markup) => CREATE_TYPE_ROUTES[type](markup);
+
+const updateMarkupByType = (element, type, markup, size, scale) => {
+  element.rect = getMarkupRect(markup, size, scale);
+  element.styles = getMarkupStyles(markup, size, scale);
+  UPDATE_TYPE_ROUTES[type](element, markup, size, scale);
+};
+
+const createMarkupView = _ =>
+  _.utils.createView({
+    name: 'image-preview-markup',
+    tag: 'svg',
+    ignoreRect: true,
+    mixins: {
+      apis: ['width', 'height', 'crop', 'markup', 'resize', 'dirty']
+    },
+    write: ({ root, props }) => {
+      if (!props.dirty) return;
+
+      const { crop, resize, markup } = props;
+
+      const viewWidth = props.width;
+      const viewHeight = props.height;
+
+      let cropWidth = crop.width;
+      let cropHeight = crop.height;
+
+      if (resize) {
+        const { size } = resize;
+
+        const outputWidth = size && size.width;
+        const outputHeight = size && size.height;
+        const outputFit = resize.mode;
+        const outputUpscale = resize.upscale;
+
+        if (outputWidth && !outputHeight) outputHeight = outputWidth;
+        if (outputHeight && !outputWidth) outputWidth = outputHeight;
+
+        const shouldUpscale =
+          cropWidth < outputWidth && cropHeight < outputHeight;
+
+        if (!shouldUpscale || (shouldUpscale && outputUpscale)) {
+          let scalarWidth = outputWidth / cropWidth;
+          let scalarHeight = outputHeight / cropHeight;
+
+          if (outputFit === 'force') {
+            cropWidth = outputWidth;
+            cropHeight = outputHeight;
+          } else {
+            let scalar;
+            if (outputFit === 'cover') {
+              scalar = Math.max(scalarWidth, scalarHeight);
+            } else if (outputFit === 'contain') {
+              scalar = Math.min(scalarWidth, scalarHeight);
+            }
+            cropWidth = cropWidth * scalar;
+            cropHeight = cropHeight * scalar;
+          }
+        }
+      }
+
+      const size = {
+        width: viewWidth,
+        height: viewHeight
+      };
+      root.element.setAttribute('width', size.width);
+      root.element.setAttribute('height', size.height);
+
+      const scale = Math.min(viewWidth / cropWidth, viewHeight / cropHeight);
+
+      // clear
+      root.element.innerHTML = '';
+
+      // get filter
+      const markupFilter = root.query('GET_IMAGE_PREVIEW_MARKUP_FILTER');
+
+      // draw new
+      markup.filter(markupFilter).forEach(markup => {
+        const [type, settings] = markup;
+
+        // create
+        const element = createMarkupByType(type, settings);
+
+        // update
+        updateMarkupByType(element, type, settings, size, scale);
+
+        // add
+        root.element.appendChild(element);
+      });
+    }
+  });
+
+const createVector$1 = (x, y) => ({ x, y });
 
 const vectorDot = (a, b) => a.x * b.x + a.y * b.y;
 
-const vectorSubtract = (a, b) => createVector(a.x - b.x, a.y - b.y);
+const vectorSubtract = (a, b) => createVector$1(a.x - b.x, a.y - b.y);
 
 const vectorDistanceSquared = (a, b) =>
   vectorDot(vectorSubtract(a, b), vectorSubtract(a, b));
@@ -42,7 +438,7 @@ const getOffsetPointOnEdge = (length, rotation) => {
   const b = ratio * sinB;
   const c = ratio * sinC;
 
-  return createVector(cosC * b, cosC * c);
+  return createVector$1(cosC * b, cosC * c);
 };
 
 const getRotatedRectSize = (rect, rotation) => {
@@ -52,14 +448,14 @@ const getRotatedRectSize = (rect, rotation) => {
   const hor = getOffsetPointOnEdge(w, rotation);
   const ver = getOffsetPointOnEdge(h, rotation);
 
-  const tl = createVector(rect.x + Math.abs(hor.x), rect.y - Math.abs(hor.y));
+  const tl = createVector$1(rect.x + Math.abs(hor.x), rect.y - Math.abs(hor.y));
 
-  const tr = createVector(
+  const tr = createVector$1(
     rect.x + rect.width + Math.abs(ver.y),
     rect.y + Math.abs(ver.x)
   );
 
-  const bl = createVector(
+  const bl = createVector$1(
     rect.x - Math.abs(ver.y),
     rect.y + rect.height - Math.abs(ver.x)
   );
@@ -67,6 +463,29 @@ const getRotatedRectSize = (rect, rotation) => {
   return {
     width: vectorDistance(tl, tr),
     height: vectorDistance(tl, bl)
+  };
+};
+
+const calculateCanvasSize = (image, canvasAspectRatio, zoom = 1) => {
+  const imageAspectRatio = image.height / image.width;
+
+  // determine actual pixels on x and y axis
+  let canvasWidth = 1;
+  let canvasHeight = canvasAspectRatio;
+  let imgWidth = 1;
+  let imgHeight = imageAspectRatio;
+  if (imgHeight > canvasHeight) {
+    imgHeight = canvasHeight;
+    imgWidth = imgHeight / imageAspectRatio;
+  }
+
+  const scalar = Math.max(canvasWidth / imgWidth, canvasHeight / imgHeight);
+  const width = image.width / (zoom * scalar * imgWidth);
+  const height = width * canvasAspectRatio;
+
+  return {
+    width: width,
+    height: height
   };
 };
 
@@ -103,6 +522,51 @@ const getCenteredCropRect = (container, aspectRatio) => {
     width,
     height
   };
+};
+
+const getCurrentCropSize = (imageSize, crop = {}) => {
+  let { zoom, rotation, center, aspectRatio } = crop;
+
+  if (!aspectRatio) aspectRatio = imageSize.height / imageSize.width;
+
+  const canvasSize = calculateCanvasSize(imageSize, aspectRatio, zoom);
+
+  const canvasCenter = {
+    x: canvasSize.width * 0.5,
+    y: canvasSize.height * 0.5
+  };
+
+  const stage = {
+    x: 0,
+    y: 0,
+    width: canvasSize.width,
+    height: canvasSize.height,
+    center: canvasCenter
+  };
+
+  const stageZoomFactor = getImageRectZoomFactor(
+    imageSize,
+    getCenteredCropRect(stage, aspectRatio),
+    rotation,
+    center
+  );
+
+  const scale = zoom * stageZoomFactor;
+
+  // start drawing
+  return {
+    widthFloat: canvasSize.width / scale,
+    heightFloat: canvasSize.height / scale,
+    width: Math.round(canvasSize.width / scale),
+    height: Math.round(canvasSize.height / scale)
+  };
+};
+
+const IMAGE_SCALE_SPRING_PROPS = {
+  type: 'spring',
+  stiffness: 0.5,
+  damping: 0.45,
+  mass: 10
 };
 
 // does horizontal and vertical flipping
@@ -165,7 +629,7 @@ const createClipView = _ =>
     tag: 'div',
     ignoreRect: true,
     mixins: {
-      apis: ['crop', 'width', 'height'],
+      apis: ['crop', 'markup', 'resize', 'width', 'height', 'dirty'],
       styles: ['width', 'height', 'opacity'],
       animations: {
         opacity: { type: 'tween', duration: 250 }
@@ -178,6 +642,19 @@ const createClipView = _ =>
           Object.assign({}, props)
         )
       );
+
+      root.ref.createMarkup = () => {
+        if (root.ref.markup) return;
+        root.ref.markup = root.appendChildView(
+          root.createChildView(createMarkupView(_), Object.assign({}, props))
+        );
+      };
+
+      root.ref.destroyMarkup = () => {
+        if (!root.ref.markup) return;
+        root.removeChildView(root.ref.markup);
+        root.ref.markup = null;
+      };
 
       // set up transparency grid
       const transparencyIndicator = root.query(
@@ -197,7 +674,7 @@ const createClipView = _ =>
       }
     },
     write: ({ root, props, shouldOptimize }) => {
-      const { crop, width, height } = props;
+      const { crop, markup, resize, dirty, width, height } = props;
 
       root.ref.image.crop = crop;
 
@@ -240,6 +717,20 @@ const createClipView = _ =>
 
       const scale = crop.zoom * stageZoomFactor;
 
+      // update markup view
+      if (markup && markup.length) {
+        root.ref.createMarkup();
+        root.ref.markup.width = width;
+        root.ref.markup.height = height;
+        root.ref.markup.resize = resize;
+        root.ref.markup.dirty = dirty;
+        root.ref.markup.markup = markup;
+        root.ref.markup.crop = getCurrentCropSize(image, crop);
+      } else if (root.ref.markup) {
+        root.ref.destroyMarkup();
+      }
+
+      // update image view
       const imageView = root.ref.image;
 
       // don't update clip layout
@@ -270,7 +761,7 @@ const createImageView = _ =>
     tag: 'div',
     ignoreRect: true,
     mixins: {
-      apis: ['crop', 'image'],
+      apis: ['image', 'crop', 'markup', 'resize', 'dirty'],
       styles: ['translateY', 'scaleX', 'scaleY', 'opacity'],
       animations: {
         scaleX: IMAGE_SCALE_SPRING_PROPS,
@@ -282,17 +773,24 @@ const createImageView = _ =>
     create: ({ root, props }) => {
       root.ref.clip = root.appendChildView(
         root.createChildView(createClipView(_), {
+          id: props.id,
           image: props.image,
-          crop: props.crop
+          crop: props.crop,
+          markup: props.markup,
+          resize: props.resize,
+          dirty: props.dirty
         })
       );
     },
     write: ({ root, props, shouldOptimize }) => {
       const { clip } = root.ref;
 
-      const { crop, image } = props;
+      const { image, crop, markup, resize, dirty } = props;
 
       clip.crop = crop;
+      clip.markup = markup;
+      clip.resize = resize;
+      clip.dirty = dirty;
 
       // don't update clip layout
       clip.opacity = shouldOptimize ? 0 : 1;
@@ -691,11 +1189,24 @@ const createImageWrapperView = _ => {
       aspectRatio: null
     };
 
+    let markup;
+    let resize;
+    let dirty = false;
+    if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
+      markup = item.getMetadata('markup') || [];
+      resize = item.getMetadata('resize');
+      dirty = true;
+    }
+
     // append image presenter
     const imageView = root.appendChildView(
       root.createChildView(ImageView, {
+        id,
         image,
         crop,
+        resize,
+        markup,
+        dirty,
         opacity: 0,
         scaleX: 1.15,
         scaleY: 1.15,
@@ -722,12 +1233,17 @@ const createImageWrapperView = _ => {
     if (!item) return;
     const imageView = root.ref.images[root.ref.images.length - 1];
     imageView.crop = item.getMetadata('crop');
+    if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
+      imageView.dirty = true;
+      imageView.resize = item.getMetadata('resize');
+      imageView.markup = item.getMetadata('markup');
+    }
   };
 
   // replace image preview
   const didUpdateItemMetadata = ({ root, props, action }) => {
     // only filter and crop trigger redraw
-    if (!/crop|filter/.test(action.change.key)) return;
+    if (!/crop|filter|markup|resize/.test(action.change.key)) return;
 
     // no images to update, exit
     if (!root.ref.images.length) return;
@@ -743,7 +1259,7 @@ const createImageWrapperView = _ => {
       return;
     }
 
-    if (/crop/.test(action.change.key)) {
+    if (/crop|markup|resize/.test(action.change.key)) {
       const crop = item.getMetadata('crop');
       const image = root.ref.images[root.ref.images.length - 1];
 
@@ -994,6 +1510,11 @@ const createImageWrapperView = _ => {
       root.ref.images.forEach(imageView => {
         imageView.image.width = 1;
         imageView.image.height = 1;
+      });
+    },
+    didWriteView: ({ root }) => {
+      root.ref.images.forEach(imageView => {
+        imageView.dirty = false;
       });
     },
     write: _.utils.createRoute(
@@ -1250,7 +1771,13 @@ const plugin = fpAPI => {
       imagePreviewTransparencyIndicator: [null, Type.STRING],
 
       // Enables or disables reading average image color
-      imagePreviewCalculateAverageImageColor: [false, Type.BOOLEAN]
+      imagePreviewCalculateAverageImageColor: [false, Type.BOOLEAN],
+
+      // Enables or disables the previewing of markup
+      imagePreviewMarkupShow: [true, Type.BOOLEAN],
+
+      // Allows filtering of markup to only show certain shapes
+      imagePreviewMarkupFilter: [() => true, Type.FUNCTION]
     }
   };
 };

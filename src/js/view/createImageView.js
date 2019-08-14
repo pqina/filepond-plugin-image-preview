@@ -1,106 +1,12 @@
+import { createMarkupView } from './createMarkupView';
+import { getImageRectZoomFactor, getCenteredCropRect, getCurrentCropSize } from '../utils/crop';
+
 const IMAGE_SCALE_SPRING_PROPS = {
     type: 'spring',
     stiffness: 0.5,
     damping: 0.45,
     mass: 10
 };
-
-const createVector = (x,y) => ({x,y});
-
-const vectorDot = (a, b) => a.x * b.x + a.y * b.y;
-
-const vectorSubtract = (a, b) => createVector(a.x - b.x, a.y - b.y);
-
-const vectorDistanceSquared = (a, b) => vectorDot(vectorSubtract(a, b), vectorSubtract(a, b));
-
-const vectorDistance = (a, b) => Math.sqrt(vectorDistanceSquared(a, b));
-
-const getOffsetPointOnEdge = (length, rotation) => {
-
-    const a = length;
-
-    const A = 1.5707963267948966;
-    const B = rotation;
-    const C = 1.5707963267948966 - rotation;
-
-    const sinA = Math.sin(A);
-    const sinB = Math.sin(B);
-    const sinC = Math.sin(C);
-    const cosC = Math.cos(C);
-    const ratio = a / sinA;
-    const b = ratio * sinB;
-    const c = ratio * sinC;
-
-    return createVector(cosC * b, cosC * c);
-
-}
-
-const getRotatedRectSize = (rect, rotation) => {
-
-    const w = rect.width;
-    const h = rect.height;
-
-    const hor = getOffsetPointOnEdge(w, rotation);
-    const ver = getOffsetPointOnEdge(h, rotation);
-
-    const tl = createVector(
-        rect.x + Math.abs(hor.x),
-        rect.y - Math.abs(hor.y)
-    )
-
-    const tr = createVector(
-        rect.x + rect.width + Math.abs(ver.y),
-        rect.y + Math.abs(ver.x)
-    )
-
-    const bl = createVector(
-        rect.x - Math.abs(ver.y),
-        (rect.y + rect.height) - Math.abs(ver.x)
-    )
-    
-    return {
-        width: vectorDistance(tl, tr),
-        height: vectorDistance(tl, bl)
-    }
-
-};
-
-const getImageRectZoomFactor = (imageRect, cropRect, rotation, center) => {
-
-    // calculate available space round image center position
-    const cx = center.x > .5 ? 1 - center.x : center.x;
-    const cy = center.y > .5 ? 1 - center.y : center.y;
-    const imageWidth = cx * 2 * imageRect.width;
-    const imageHeight = cy * 2 * imageRect.height;
-
-    // calculate rotated crop rectangle size
-    const rotatedCropSize = getRotatedRectSize(cropRect, rotation);
-
-    // calculate scalar required to fit image
-    return Math.max(
-        rotatedCropSize.width / imageWidth, 
-        rotatedCropSize.height / imageHeight
-    );
-
-};
-
-const getCenteredCropRect = (container, aspectRatio) => {
-
-    let width = container.width;
-    let height = width * aspectRatio;
-    if (height > container.height) {
-        height = container.height;
-        width = height / aspectRatio;
-    }
-    const x = ((container.width - width) * .5);
-    const y = ((container.height - height) * .5);
-
-    return {
-        x, y, width, height
-    }
-
-}
-
 
 // does horizontal and vertical flipping
 const createBitmapView = _ => _.utils.createView({
@@ -111,7 +17,6 @@ const createBitmapView = _ => _.utils.createView({
         root.appendChild(props.image);
     }
 });
-
 
 // shifts and rotates image
 const createImageCanvasWrapper = _ => _.utils.createView({
@@ -160,14 +65,20 @@ const createImageCanvasWrapper = _ => _.utils.createView({
     }
 });
 
-
 // clips canvas to correct aspect ratio
 const createClipView = _ => _.utils.createView({
     name: 'image-clip',
     tag: 'div',
     ignoreRect: true,
     mixins: {
-        apis: ['crop', 'width', 'height'],
+        apis: [
+            'crop', 
+            'markup',
+            'resize',
+            'width', 
+            'height',
+            'dirty'
+        ],
         styles: ['width', 'height', 'opacity'],
         animations: {
             opacity: { type: 'tween', duration: 250 }
@@ -178,6 +89,19 @@ const createClipView = _ => _.utils.createView({
         root.ref.image = root.appendChildView(
             root.createChildView(createImageCanvasWrapper(_), Object.assign({}, props))
         );
+
+        root.ref.createMarkup = () => {
+            if (root.ref.markup) return;
+            root.ref.markup = root.appendChildView(
+                root.createChildView(createMarkupView(_), Object.assign({}, props))
+            );
+        }
+
+        root.ref.destroyMarkup = () => {
+            if (!root.ref.markup) return;
+            root.removeChildView(root.ref.markup);
+            root.ref.markup = null;
+        }
 
         // set up transparency grid
         const transparencyIndicator = root.query('GET_IMAGE_PREVIEW_TRANSPARENCY_INDICATOR');
@@ -197,7 +121,7 @@ const createClipView = _ => _.utils.createView({
     },
     write: ({ root, props, shouldOptimize }) => {
 
-        const { crop, width, height } = props;
+        const { crop, markup, resize, dirty, width, height } = props;
 
         root.ref.image.crop = crop;
 
@@ -242,7 +166,22 @@ const createClipView = _ => _.utils.createView({
         );
     
         const scale = crop.zoom * stageZoomFactor;
+
+        // update markup view
+        if (markup && markup.length) {
+            root.ref.createMarkup();
+            root.ref.markup.width = width;
+            root.ref.markup.height = height;
+            root.ref.markup.resize = resize;
+            root.ref.markup.dirty = dirty;
+            root.ref.markup.markup = markup;
+            root.ref.markup.crop = getCurrentCropSize(image, crop);
+        }
+        else if (root.ref.markup) {
+            root.ref.destroyMarkup();
+        }
     
+        // update image view
         const imageView = root.ref.image;
 
         // don't update clip layout
@@ -273,8 +212,11 @@ export const createImageView = _ => _.utils.createView({
     ignoreRect: true,
     mixins: {
         apis: [
+            'image',
             'crop',
-            'image'
+            'markup',
+            'resize',
+            'dirty'
         ],
         styles: [
             'translateY',
@@ -292,8 +234,12 @@ export const createImageView = _ => _.utils.createView({
     create: ({ root, props }) => {
         root.ref.clip = root.appendChildView(
             root.createChildView(createClipView(_), {
+                id: props.id,
                 image: props.image,
-                crop: props.crop
+                crop: props.crop,
+                markup: props.markup,
+                resize: props.resize,
+                dirty: props.dirty
             })
         );
     },
@@ -301,9 +247,12 @@ export const createImageView = _ => _.utils.createView({
 
         const { clip } = root.ref;
 
-        const { crop, image } = props;
+        const { image, crop, markup, resize, dirty } = props;
 
         clip.crop = crop;
+        clip.markup = markup;
+        clip.resize = resize;
+        clip.dirty = dirty;
 
         // don't update clip layout
         clip.opacity = shouldOptimize ? 0 : 1;

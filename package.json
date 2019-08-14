@@ -1,6 +1,6 @@
 {
     "name": "filepond-plugin-image-preview",
-    "version": "4.2.1",
+    "version": "4.3.0",
     "description": "Image Preview Plugin for FilePond",
     "license": "MIT",
     "author": {
@@ -22,7 +22,7 @@
         "dist"
     ],
     "scripts": {
-        "start": "npx rollup -c -w",
+        "start": "npx rollup -c -w | npm run styles",
         "build": "npm run scripts | npm run styles",
         "scripts": "npx rollup -c",
         "styles": "npm run styles:pretty && npm run styles:nano",

@@ -1,10 +1,16 @@
 /*!
- * FilePondPluginImagePreview 4.2.1
+ * FilePondPluginImagePreview 4.3.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
 
 /* eslint-disable */
+.filepond--image-preview-markup {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
 .filepond--image-preview-wrapper {
   z-index: 2;
 }

@@ -105,11 +105,24 @@ export const createImageWrapperView = _ => {
             aspectRatio: null
         };
 
+        let markup;
+        let resize;
+        let dirty = false;
+        if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
+            markup = item.getMetadata('markup') || [];
+            resize = item.getMetadata('resize');
+            dirty = true;
+        }
+
         // append image presenter
         const imageView = root.appendChildView(
             root.createChildView(ImageView, {
+                id, 
                 image,
                 crop,
+                resize,
+                markup,
+                dirty,
                 opacity: 0,
                 scaleX: 1.15,
                 scaleY: 1.15,
@@ -136,13 +149,18 @@ export const createImageWrapperView = _ => {
         if (!item) return;
         const imageView = root.ref.images[root.ref.images.length-1];
         imageView.crop = item.getMetadata('crop');
+        if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
+            imageView.dirty = true;
+            imageView.resize = item.getMetadata('resize');
+            imageView.markup = item.getMetadata('markup');
+        }
     }
 
     // replace image preview
     const didUpdateItemMetadata = ({ root, props, action }) => {
 
         // only filter and crop trigger redraw
-        if (!/crop|filter/.test(action.change.key)) return;
+        if (!/crop|filter|markup|resize/.test(action.change.key)) return;
 
         // no images to update, exit
         if (!root.ref.images.length) return;
@@ -158,7 +176,7 @@ export const createImageWrapperView = _ => {
             return;
         }
 
-        if (/crop/.test(action.change.key)) {
+        if (/crop|markup|resize/.test(action.change.key)) {
 
             const crop = item.getMetadata('crop');
             const image = root.ref.images[root.ref.images.length-1];
@@ -422,6 +440,11 @@ export const createImageWrapperView = _ => {
                 imageView.image.height = 1;
             });
         },
+        didWriteView: ({ root }) => {
+            root.ref.images.forEach(imageView => {
+                imageView.dirty = false
+            });
+        },
         write: _.utils.createRoute({
             // image preview stated
             DID_IMAGE_PREVIEW_DRAW: didDrawPreview,
@@ -447,7 +470,6 @@ export const createImageWrapperView = _ => {
             // remove these views
             viewsToRemove.forEach(imageView => removeImageView(root, imageView));
             viewsToRemove.length = 0;
-
         })
     });
 };
