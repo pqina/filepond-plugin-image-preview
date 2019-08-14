@@ -1,5 +1,7 @@
 import { createMarkupByType, updateMarkupByType } from '../utils/markup';
 
+const sortMarkupByZIndex = (a, b) => a[1].zIndex > b[1].zIndex ? 1 : -1;
+
 export const createMarkupView = _ => _.utils.createView({
     name: 'image-preview-markup',
     tag: 'svg',
@@ -84,7 +86,7 @@ export const createMarkupView = _ => _.utils.createView({
         const markupFilter = root.query('GET_IMAGE_PREVIEW_MARKUP_FILTER');
 
         // draw new
-        markup.filter(markupFilter).forEach(markup => {
+        markup.filter(markupFilter).sort(sortMarkupByZIndex).forEach(markup => {
 
             const [type, settings] = markup;
 

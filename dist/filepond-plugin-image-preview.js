@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.3.0
+ * FilePondPluginImagePreview 4.3.1
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -2006,6 +2006,10 @@
     UPDATE_TYPE_ROUTES[type](element, markup, size, scale);
   };
 
+  var sortMarkupByZIndex = function sortMarkupByZIndex(a, b) {
+    return a[1].zIndex > b[1].zIndex ? 1 : -1;
+  };
+
   var createMarkupView = function createMarkupView(_) {
     return _.utils.createView({
       name: 'image-preview-markup',
@@ -2083,20 +2087,23 @@
         var markupFilter = root.query('GET_IMAGE_PREVIEW_MARKUP_FILTER');
 
         // draw new
-        markup.filter(markupFilter).forEach(function(markup) {
-          var _markup = _slicedToArray(markup, 2),
-            type = _markup[0],
-            settings = _markup[1];
+        markup
+          .filter(markupFilter)
+          .sort(sortMarkupByZIndex)
+          .forEach(function(markup) {
+            var _markup = _slicedToArray(markup, 2),
+              type = _markup[0],
+              settings = _markup[1];
 
-          // create
-          var element = createMarkupByType(type, settings);
+            // create
+            var element = createMarkupByType(type, settings);
 
-          // update
-          updateMarkupByType(element, type, settings, size, scale);
+            // update
+            updateMarkupByType(element, type, settings, size, scale);
 
-          // add
-          root.element.appendChild(element);
-        });
+            // add
+            root.element.appendChild(element);
+          });
       }
     });
   };
