@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.3.1
+ * FilePondPluginImagePreview 4.3.2
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -352,8 +352,8 @@ const createMarkupView = _ =>
       if (resize) {
         const { size } = resize;
 
-        const outputWidth = size && size.width;
-        const outputHeight = size && size.height;
+        let outputWidth = size && size.width;
+        let outputHeight = size && size.height;
         const outputFit = resize.mode;
         const outputUpscale = resize.upscale;
 
@@ -387,6 +387,7 @@ const createMarkupView = _ =>
         width: viewWidth,
         height: viewHeight
       };
+
       root.element.setAttribute('width', size.width);
       root.element.setAttribute('height', size.height);
 

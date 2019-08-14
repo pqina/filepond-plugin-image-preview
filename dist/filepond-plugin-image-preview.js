@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.3.1
+ * FilePondPluginImagePreview 4.3.2
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -2042,10 +2042,8 @@
           var outputFit = resize.mode;
           var outputUpscale = resize.upscale;
 
-          if (outputWidth && !outputHeight)
-            outputHeight = (_readOnlyError('outputHeight'), outputWidth);
-          if (outputHeight && !outputWidth)
-            outputWidth = (_readOnlyError('outputWidth'), outputHeight);
+          if (outputWidth && !outputHeight) outputHeight = outputWidth;
+          if (outputHeight && !outputWidth) outputWidth = outputHeight;
 
           var shouldUpscale =
             cropWidth < outputWidth && cropHeight < outputHeight;

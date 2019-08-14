@@ -32,8 +32,8 @@ export const createMarkupView = _ => _.utils.createView({
 
             const { size } = resize;
 
-            const outputWidth = size && size.width;
-            const outputHeight = size && size.height;
+            let outputWidth = size && size.width;
+            let outputHeight = size && size.height;
             const outputFit = resize.mode;
             const outputUpscale = resize.upscale;
             
@@ -71,6 +71,7 @@ export const createMarkupView = _ => _.utils.createView({
             width: viewWidth,
             height: viewHeight
         };
+        
         root.element.setAttribute('width', size.width);
         root.element.setAttribute('height', size.height);
 
