@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.3.2
+ * FilePondPluginImagePreview 4.3.3
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -2006,8 +2006,52 @@
     UPDATE_TYPE_ROUTES[type](element, markup, size, scale);
   };
 
+  var MARKUP_RECT = [
+    'x',
+    'y',
+    'left',
+    'top',
+    'right',
+    'bottom',
+    'width',
+    'height'
+  ];
+
+  var toOptionalFraction = function toOptionalFraction(value) {
+    return typeof value === 'string' && /%/.test(value)
+      ? parseFloat(value) / 100
+      : value;
+  };
+
+  // adds default markup properties, clones markup
+  var prepareMarkup = function prepareMarkup(markup) {
+    var _markup = _slicedToArray(markup, 2),
+      type = _markup[0],
+      props = _markup[1];
+
+    return [
+      type,
+      Object.assign(
+        {
+          zIndex: 0
+        },
+        props,
+        MARKUP_RECT.reduce(function(prev, curr) {
+          prev[curr] = toOptionalFraction(props[curr]);
+          return prev;
+        }, {})
+      )
+    ];
+  };
+
   var sortMarkupByZIndex = function sortMarkupByZIndex(a, b) {
-    return a[1].zIndex > b[1].zIndex ? 1 : -1;
+    if (a[1].zIndex > b[1].zIndex) {
+      return 1;
+    }
+    if (a[1].zIndex < b[1].zIndex) {
+      return -1;
+    }
+    return 0;
   };
 
   var createMarkupView = function createMarkupView(_) {
@@ -2087,6 +2131,7 @@
         // draw new
         markup
           .filter(markupFilter)
+          .map(prepareMarkup)
           .sort(sortMarkupByZIndex)
           .forEach(function(markup) {
             var _markup = _slicedToArray(markup, 2),
