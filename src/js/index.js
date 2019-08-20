@@ -5,7 +5,6 @@ import { isBitmap } from './utils/isBitmap';
 /**
  * Image Preview Plugin
  */
-
 const plugin = fpAPI => {
     const { addFilter, utils } = fpAPI;
     const { Type, createRoute, isFile } = utils;
@@ -20,9 +19,7 @@ const plugin = fpAPI => {
         const { is, view, query } = viewAPI;
 
         // only hook up to item view and only if is enabled for this cropper
-        if (!is('file') || !query('GET_ALLOW_IMAGE_PREVIEW')) {
-            return;
-        }
+        if (!is('file') || !query('GET_ALLOW_IMAGE_PREVIEW')) return;
 
         // create the image preview plugin, but only do so if the item is an image
         const didLoadItem = ({ root, props }) => {
@@ -38,6 +35,9 @@ const plugin = fpAPI => {
 
             // exit if this is not an image
             if (!isPreviewableImage(file)) return;
+
+            // test if is filtered
+            if (!query('GET_IMAGE_PREVIEW_FILTER_ITEM')(item)) return;
 
             // exit if image size is too high and no createImageBitmap support
             // this would simply bring the browser to its knees and that is not what we want
@@ -155,6 +155,9 @@ const plugin = fpAPI => {
                 DID_UPDATE_ITEM_METADATA: didUpdateItemMetadata
             }, ({ root, props }) => {
 
+                // no preview view attached
+                if (!root.ref.imagePreview) return;
+
                 // don't do anything while hidden
                 if (root.rect.element.hidden) return;
 
@@ -182,6 +185,9 @@ const plugin = fpAPI => {
         options: {
             // Enable or disable image preview
             allowImagePreview: [true, Type.BOOLEAN],
+
+            // filters file items to determine which are shown as preview
+            imagePreviewFilterItem: [() => true, Type.FUNCTION],
 
             // Fixed preview height
             imagePreviewHeight: [null, Type.INT],

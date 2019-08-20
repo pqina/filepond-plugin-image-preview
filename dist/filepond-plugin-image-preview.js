@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.3.3
+ * FilePondPluginImagePreview 4.4.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -3427,7 +3427,6 @@
   /**
    * Image Preview Plugin
    */
-
   var plugin = function plugin(fpAPI) {
     var addFilter = fpAPI.addFilter,
       utils = fpAPI.utils;
@@ -3446,9 +3445,7 @@
         query = viewAPI.query;
 
       // only hook up to item view and only if is enabled for this cropper
-      if (!is('file') || !query('GET_ALLOW_IMAGE_PREVIEW')) {
-        return;
-      }
+      if (!is('file') || !query('GET_ALLOW_IMAGE_PREVIEW')) return;
 
       // create the image preview plugin, but only do so if the item is an image
       var didLoadItem = function didLoadItem(_ref) {
@@ -3465,6 +3462,9 @@
 
         // exit if this is not an image
         if (!isPreviewableImage(file)) return;
+
+        // test if is filtered
+        if (!query('GET_IMAGE_PREVIEW_FILTER_ITEM')(item)) return;
 
         // exit if image size is too high and no createImageBitmap support
         // this would simply bring the browser to its knees and that is not what we want
@@ -3611,6 +3611,9 @@
             var root = _ref6.root,
               props = _ref6.props;
 
+            // no preview view attached
+            if (!root.ref.imagePreview) return;
+
             // don't do anything while hidden
             if (root.rect.element.hidden) return;
 
@@ -3639,6 +3642,14 @@
       options: {
         // Enable or disable image preview
         allowImagePreview: [true, Type.BOOLEAN],
+
+        // filters file items to determine which are shown as preview
+        imagePreviewFilterItem: [
+          function() {
+            return true;
+          },
+          Type.FUNCTION
+        ],
 
         // Fixed preview height
         imagePreviewHeight: [null, Type.INT],
