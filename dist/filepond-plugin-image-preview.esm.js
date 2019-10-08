@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.4.0
+ * FilePondPluginImagePreview 4.5.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -592,11 +592,13 @@ const getCurrentCropSize = (imageSize, crop = {}) => {
     center: canvasCenter
   };
 
+  const shouldLimit = typeof crop.scaleToFit === 'undefined' || crop.scaleToFit;
+
   const stageZoomFactor = getImageRectZoomFactor(
     imageSize,
     getCenteredCropRect(stage, aspectRatio),
     rotation,
-    center
+    shouldLimit ? center : { x: 0.5, y: 0.5 }
   );
 
   const scale = zoom * stageZoomFactor;
@@ -677,11 +679,23 @@ const createClipView = _ =>
     tag: 'div',
     ignoreRect: true,
     mixins: {
-      apis: ['crop', 'markup', 'resize', 'width', 'height', 'dirty'],
+      apis: [
+        'crop',
+        'markup',
+        'resize',
+        'width',
+        'height',
+        'dirty',
+        'background'
+      ],
       styles: ['width', 'height', 'opacity'],
       animations: {
         opacity: { type: 'tween', duration: 250 }
       }
+    },
+    didWriteView: function({ root, props }) {
+      if (!props.background) return;
+      root.element.style.backgroundColor = props.background;
     },
     create: ({ root, props }) => {
       root.ref.image = root.appendChildView(
@@ -756,11 +770,14 @@ const createClipView = _ =>
 
       const cropAspectRatio = crop.aspectRatio || image.height / image.width;
 
+      const shouldLimit =
+        typeof crop.scaleToFit === 'undefined' || crop.scaleToFit;
+
       const stageZoomFactor = getImageRectZoomFactor(
         image,
         getCenteredCropRect(stage, cropAspectRatio),
         rotation,
-        crop.center
+        shouldLimit ? crop.center : { x: 0.5, y: 0.5 }
       );
 
       const scale = crop.zoom * stageZoomFactor;
@@ -809,7 +826,7 @@ const createImageView = _ =>
     tag: 'div',
     ignoreRect: true,
     mixins: {
-      apis: ['image', 'crop', 'markup', 'resize', 'dirty'],
+      apis: ['image', 'crop', 'markup', 'resize', 'dirty', 'background'],
       styles: ['translateY', 'scaleX', 'scaleY', 'opacity'],
       animations: {
         scaleX: IMAGE_SCALE_SPRING_PROPS,
@@ -826,7 +843,8 @@ const createImageView = _ =>
           crop: props.crop,
           markup: props.markup,
           resize: props.resize,
-          dirty: props.dirty
+          dirty: props.dirty,
+          background: props.background
         })
       );
     },
@@ -1237,6 +1255,10 @@ const createImageWrapperView = _ => {
       aspectRatio: null
     };
 
+    const background = root.query(
+      'GET_IMAGE_TRANSFORM_CANVAS_BACKGROUND_COLOR'
+    );
+
     let markup;
     let resize;
     let dirty = false;
@@ -1255,6 +1277,7 @@ const createImageWrapperView = _ => {
         resize,
         markup,
         dirty,
+        background,
         opacity: 0,
         scaleX: 1.15,
         scaleY: 1.15,
@@ -1281,6 +1304,9 @@ const createImageWrapperView = _ => {
     if (!item) return;
     const imageView = root.ref.images[root.ref.images.length - 1];
     imageView.crop = item.getMetadata('crop');
+    imageView.background = root.query(
+      'GET_IMAGE_TRANSFORM_CANVAS_BACKGROUND_COLOR'
+    );
     if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
       imageView.dirty = true;
       imageView.resize = item.getMetadata('resize');

@@ -141,11 +141,13 @@ export const getCurrentCropSize = (imageSize, crop = {}) => {
         center: canvasCenter
     }
 
+    const shouldLimit = typeof crop.scaleToFit === 'undefined' || crop.scaleToFit;
+
     const stageZoomFactor = getImageRectZoomFactor(
         imageSize,
         getCenteredCropRect(stage, aspectRatio),
         rotation,
-        center
+        shouldLimit ? center : { x:.5, y:.5 }
     );
     
     const scale = zoom * stageZoomFactor;

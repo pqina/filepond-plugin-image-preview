@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.4.0
+ * FilePondPluginImagePreview 4.5.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -2311,11 +2311,13 @@
       center: canvasCenter
     };
 
+    var shouldLimit = typeof crop.scaleToFit === 'undefined' || crop.scaleToFit;
+
     var stageZoomFactor = getImageRectZoomFactor(
       imageSize,
       getCenteredCropRect(stage, aspectRatio),
       rotation,
-      center
+      shouldLimit ? center : { x: 0.5, y: 0.5 }
     );
 
     var scale = zoom * stageZoomFactor;
@@ -2407,7 +2409,15 @@
       tag: 'div',
       ignoreRect: true,
       mixins: {
-        apis: ['crop', 'markup', 'resize', 'width', 'height', 'dirty'],
+        apis: [
+          'crop',
+          'markup',
+          'resize',
+          'width',
+          'height',
+          'dirty',
+          'background'
+        ],
 
         styles: ['width', 'height', 'opacity'],
         animations: {
@@ -2415,9 +2425,15 @@
         }
       },
 
-      create: function create(_ref4) {
+      didWriteView: function didWriteView(_ref4) {
         var root = _ref4.root,
           props = _ref4.props;
+        if (!props.background) return;
+        root.element.style.backgroundColor = props.background;
+      },
+      create: function create(_ref5) {
+        var root = _ref5.root,
+          props = _ref5.props;
 
         root.ref.image = root.appendChildView(
           root.createChildView(
@@ -2456,10 +2472,10 @@
           root.element.dataset.transparencyIndicator = 'color';
         }
       },
-      write: function write(_ref5) {
-        var root = _ref5.root,
-          props = _ref5.props,
-          shouldOptimize = _ref5.shouldOptimize;
+      write: function write(_ref6) {
+        var root = _ref6.root,
+          props = _ref6.props,
+          shouldOptimize = _ref6.shouldOptimize;
         var crop = props.crop,
           markup = props.markup,
           resize = props.resize,
@@ -2499,12 +2515,15 @@
 
         var cropAspectRatio = crop.aspectRatio || image.height / image.width;
 
+        var shouldLimit =
+          typeof crop.scaleToFit === 'undefined' || crop.scaleToFit;
+
         var stageZoomFactor = getImageRectZoomFactor(
           image,
           getCenteredCropRect(stage, cropAspectRatio),
 
           rotation,
-          crop.center
+          shouldLimit ? crop.center : { x: 0.5, y: 0.5 }
         );
 
         var scale = crop.zoom * stageZoomFactor;
@@ -2554,7 +2573,7 @@
       tag: 'div',
       ignoreRect: true,
       mixins: {
-        apis: ['image', 'crop', 'markup', 'resize', 'dirty'],
+        apis: ['image', 'crop', 'markup', 'resize', 'dirty', 'background'],
 
         styles: ['translateY', 'scaleX', 'scaleY', 'opacity'],
 
@@ -2566,9 +2585,9 @@
         }
       },
 
-      create: function create(_ref6) {
-        var root = _ref6.root,
-          props = _ref6.props;
+      create: function create(_ref7) {
+        var root = _ref7.root,
+          props = _ref7.props;
         root.ref.clip = root.appendChildView(
           root.createChildView(createClipView(_), {
             id: props.id,
@@ -2576,14 +2595,15 @@
             crop: props.crop,
             markup: props.markup,
             resize: props.resize,
-            dirty: props.dirty
+            dirty: props.dirty,
+            background: props.background
           })
         );
       },
-      write: function write(_ref7) {
-        var root = _ref7.root,
-          props = _ref7.props,
-          shouldOptimize = _ref7.shouldOptimize;
+      write: function write(_ref8) {
+        var root = _ref8.root,
+          props = _ref8.props,
+          shouldOptimize = _ref8.shouldOptimize;
         var clip = root.ref.clip;
         var image = props.image,
           crop = props.crop,
@@ -3024,6 +3044,10 @@
         aspectRatio: null
       };
 
+      var background = root.query(
+        'GET_IMAGE_TRANSFORM_CANVAS_BACKGROUND_COLOR'
+      );
+
       var markup;
       var resize;
       var dirty = false;
@@ -3042,6 +3066,7 @@
           resize: resize,
           markup: markup,
           dirty: dirty,
+          background: background,
           opacity: 0,
           scaleX: 1.15,
           scaleY: 1.15,
@@ -3072,6 +3097,9 @@
       if (!item) return;
       var imageView = root.ref.images[root.ref.images.length - 1];
       imageView.crop = item.getMetadata('crop');
+      imageView.background = root.query(
+        'GET_IMAGE_TRANSFORM_CANVAS_BACKGROUND_COLOR'
+      );
       if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
         imageView.dirty = true;
         imageView.resize = item.getMetadata('resize');

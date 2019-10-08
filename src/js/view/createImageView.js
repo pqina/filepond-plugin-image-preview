@@ -77,12 +77,17 @@ const createClipView = _ => _.utils.createView({
             'resize',
             'width', 
             'height',
-            'dirty'
+            'dirty',
+            'background'
         ],
         styles: ['width', 'height', 'opacity'],
         animations: {
             opacity: { type: 'tween', duration: 250 }
         }
+    },
+    didWriteView: function ({ root, props }) {
+        if (!props.background) return;
+        root.element.style.backgroundColor = props.background;
     },
     create:({ root, props }) => {
 
@@ -155,6 +160,8 @@ const createClipView = _ => _.utils.createView({
         
         const cropAspectRatio = crop.aspectRatio || image.height / image.width;
 
+        const shouldLimit = typeof crop.scaleToFit === 'undefined' || crop.scaleToFit;
+
         const stageZoomFactor = getImageRectZoomFactor(
             image,
             getCenteredCropRect(
@@ -162,7 +169,7 @@ const createClipView = _ => _.utils.createView({
                 cropAspectRatio
             ),
             rotation,
-            crop.center
+            shouldLimit ? crop.center : { x:.5, y:.5 }
         );
     
         const scale = crop.zoom * stageZoomFactor;
@@ -216,7 +223,8 @@ export const createImageView = _ => _.utils.createView({
             'crop',
             'markup',
             'resize',
-            'dirty'
+            'dirty',
+            'background'
         ],
         styles: [
             'translateY',
@@ -239,7 +247,8 @@ export const createImageView = _ => _.utils.createView({
                 crop: props.crop,
                 markup: props.markup,
                 resize: props.resize,
-                dirty: props.dirty
+                dirty: props.dirty,
+                background: props.background
             })
         );
     },

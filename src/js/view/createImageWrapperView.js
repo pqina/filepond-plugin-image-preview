@@ -105,6 +105,8 @@ export const createImageWrapperView = _ => {
             aspectRatio: null
         };
 
+        const background = root.query('GET_IMAGE_TRANSFORM_CANVAS_BACKGROUND_COLOR');
+
         let markup;
         let resize;
         let dirty = false;
@@ -123,6 +125,7 @@ export const createImageWrapperView = _ => {
                 resize,
                 markup,
                 dirty,
+                background,
                 opacity: 0,
                 scaleX: 1.15,
                 scaleY: 1.15,
@@ -149,6 +152,7 @@ export const createImageWrapperView = _ => {
         if (!item) return;
         const imageView = root.ref.images[root.ref.images.length-1];
         imageView.crop = item.getMetadata('crop');
+        imageView.background = root.query('GET_IMAGE_TRANSFORM_CANVAS_BACKGROUND_COLOR');
         if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
             imageView.dirty = true;
             imageView.resize = item.getMetadata('resize');
