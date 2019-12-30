@@ -15,16 +15,18 @@ const toOptionalFraction = value => typeof value === 'string' && /%/.test(value)
 export const prepareMarkup = (markup) => {
 
     const [type, props] = markup;
+
+    const rect = props.points ? {} : MARKUP_RECT.reduce((prev, curr) => {
+        prev[curr] = toOptionalFraction(props[curr])
+        return prev;
+    }, {});
     
     return [
         type,
         {
             zIndex: 0,
             ...props,
-            ...MARKUP_RECT.reduce((prev, curr) => {
-                prev[curr] = toOptionalFraction(props[curr])
-                return prev;
-            }, {}),
+            ...rect
         }
     ]
 }

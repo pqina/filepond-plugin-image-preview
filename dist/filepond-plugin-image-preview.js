@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.5.0
+ * FilePondPluginImagePreview 4.6.0
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -1772,6 +1772,17 @@
     };
   };
 
+  var pointsToPathShape = function pointsToPathShape(points) {
+    return points
+      .map(function(point, index) {
+        return ''
+          .concat(index === 0 ? 'M' : 'L', ' ')
+          .concat(point.x, ' ')
+          .concat(point.y);
+      })
+      .join(' ');
+  };
+
   var setAttributes = function setAttributes(element, attr) {
     return Object.keys(attr).forEach(function(key) {
       return element.setAttribute(key, attr[key]);
@@ -1932,14 +1943,32 @@
     }
   };
 
+  var updatePath = function updatePath(element, markup, size, scale) {
+    setAttributes(
+      element,
+      Object.assign({}, element.styles, {
+        fill: 'none',
+        d: pointsToPathShape(
+          markup.points.map(function(point) {
+            return {
+              x: getMarkupValue(point.x, size, scale, 'width'),
+              y: getMarkupValue(point.y, size, scale, 'height')
+            };
+          })
+        )
+      })
+    );
+  };
+
   var createShape = function createShape(node) {
     return function(markup) {
-      return svg(node);
+      return svg(node, { id: markup.id });
     };
   };
 
   var createImage = function createImage(markup) {
     var shape = svg('image', {
+      id: markup.id,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
       opacity: '0'
@@ -1958,6 +1987,7 @@
 
   var createLine = function createLine(markup) {
     var shape = svg('g', {
+      id: markup.id,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round'
     });
@@ -1979,6 +2009,7 @@
     rect: createShape('rect'),
     ellipse: createShape('ellipse'),
     text: createShape('text'),
+    path: createShape('path'),
     line: createLine
   };
 
@@ -1987,6 +2018,7 @@
     ellipse: updateEllipse,
     image: updateImage,
     text: updateText,
+    path: updatePath,
     line: updateLine
   };
 
@@ -2001,7 +2033,9 @@
     size,
     scale
   ) {
-    element.rect = getMarkupRect(markup, size, scale);
+    if (type !== 'path') {
+      element.rect = getMarkupRect(markup, size, scale);
+    }
     element.styles = getMarkupStyles(markup, size, scale);
     UPDATE_TYPE_ROUTES[type](element, markup, size, scale);
   };
@@ -2029,6 +2063,13 @@
       type = _markup[0],
       props = _markup[1];
 
+    var rect = props.points
+      ? {}
+      : MARKUP_RECT.reduce(function(prev, curr) {
+          prev[curr] = toOptionalFraction(props[curr]);
+          return prev;
+        }, {});
+
     return [
       type,
       Object.assign(
@@ -2036,10 +2077,7 @@
           zIndex: 0
         },
         props,
-        MARKUP_RECT.reduce(function(prev, curr) {
-          prev[curr] = toOptionalFraction(props[curr]);
-          return prev;
-        }, {})
+        rect
       )
     ];
   };
