@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.0
+ * FilePondPluginImagePreview 4.6.1
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -3189,6 +3189,13 @@
     };
 
     var canCreateImageBitmap = function canCreateImageBitmap(file) {
+      // Firefox versions before 58 will freeze when running createImageBitmap
+      // in a Web Worker so we detect those versions and return false for support
+      var userAgent = window.navigator.userAgent;
+      var isFirefox = userAgent.match(/Firefox\/([0-9]+)\./);
+      var firefoxVersion = isFirefox ? parseInt(isFirefox[1]) : null;
+      if (firefoxVersion <= 58) return false;
+
       return 'createImageBitmap' in window && isBitmap(file);
     };
 
