@@ -110,9 +110,7 @@ const createClipView = _ => _.utils.createView({
 
         // set up transparency grid
         const transparencyIndicator = root.query('GET_IMAGE_PREVIEW_TRANSPARENCY_INDICATOR');
-        if (transparencyIndicator === null) {
-            return;
-        }
+        if (transparencyIndicator === null) return;
 
         // grid pattern
         if (transparencyIndicator === 'grid') {

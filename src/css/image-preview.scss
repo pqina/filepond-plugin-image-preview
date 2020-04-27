@@ -13,6 +13,13 @@
     // will be animated
     will-change: transform, opacity;
 
+}
+
+.filepond--image-clip {
+    position: relative;
+    overflow: hidden;
+    margin: 0 auto;
+
     // transparency indicator (currently only supports grid or basic color)
     &[data-transparency-indicator='grid'] {
         img, canvas {
@@ -21,12 +28,6 @@
             background-size: 1.25em 1.25em;
         }
     }
-}
-
-.filepond--image-clip {
-    position: relative;
-    overflow: hidden;
-    margin: 0 auto;
 }
 
 .filepond--image-bitmap,

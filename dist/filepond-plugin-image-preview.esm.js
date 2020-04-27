@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.1
+ * FilePondPluginImagePreview 4.6.2
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -750,9 +750,7 @@ const createClipView = _ =>
       const transparencyIndicator = root.query(
         'GET_IMAGE_PREVIEW_TRANSPARENCY_INDICATOR'
       );
-      if (transparencyIndicator === null) {
-        return;
-      }
+      if (transparencyIndicator === null) return;
 
       // grid pattern
       if (transparencyIndicator === 'grid') {
