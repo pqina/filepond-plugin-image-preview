@@ -19,8 +19,10 @@
         "Android >= 4.4"
     ],
     "files": [
-        "dist"
+        "dist",
+        "types/*.d.ts"
     ],
+    "types": "types/index.d.ts",
     "scripts": {
         "start": "npx rollup -c -w | npm run styles",
         "build": "npm run scripts | npm run styles",
