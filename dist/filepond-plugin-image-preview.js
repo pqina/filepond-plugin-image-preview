@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.4
+ * FilePondPluginImagePreview 4.6.5
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -3254,6 +3254,10 @@
         // get width and height from action, and swap if orientation is incorrect
         var width = imageData.width,
           height = imageData.height;
+
+        // if no width or height, just return early.
+        if (!width || !height) return;
+
         if (orientation >= 5 && orientation <= 8) {
           var _ref7 = [height, width];
           width = _ref7[0];

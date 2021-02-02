@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.4
+ * FilePondPluginImagePreview 4.6.5
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -1438,6 +1438,10 @@ const createImageWrapperView = _ => {
 
       // get width and height from action, and swap if orientation is incorrect
       let { width, height } = imageData;
+
+      // if no width or height, just return early.
+      if (!width || !height) return;
+
       if (orientation >= 5 && orientation <= 8) {
         [width, height] = [height, width];
       }
