@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.5
+ * FilePondPluginImagePreview 4.6.6
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
