@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.6
+ * FilePondPluginImagePreview 4.6.7
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -955,7 +955,6 @@ let SVG_MASK = `<svg width="500" height="200" viewBox="0 0 500 200" preserveAspe
     <rect x="0" width="500" height="200" fill="currentColor" mask="url(#mask-__UID__)"></rect>
 </svg>`;
 
-let checkedMyBases = false;
 let SVGMaskUniqueId = 0;
 
 const createImageOverlayView = fpAPI =>
@@ -964,12 +963,9 @@ const createImageOverlayView = fpAPI =>
     tag: 'div',
     ignoreRect: true,
     create: ({ root, props }) => {
-      if (!checkedMyBases && document.querySelector('base')) {
-        SVG_MASK = SVG_MASK.replace(
-          /url\(\#/g,
-          'url(' + window.location.href.replace(window.location.hash, '') + '#'
-        );
-        checkedMyBases = true;
+      if (document.querySelector('base')) {
+        const url = window.location.href.replace(window.location.hash, '');
+        SVG_MASK = SVG_MASK.replace(/url\(\#/g, 'url(' + url + '#');
       }
 
       SVGMaskUniqueId++;

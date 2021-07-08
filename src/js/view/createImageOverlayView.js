@@ -18,29 +18,29 @@ let SVG_MASK = `<svg width="500" height="200" viewBox="0 0 500 200" preserveAspe
     <rect x="0" width="500" height="200" fill="currentColor" mask="url(#mask-__UID__)"></rect>
 </svg>`;
 
-let checkedMyBases = false;
 let SVGMaskUniqueId = 0;
 
-export const createImageOverlayView = fpAPI =>
-    fpAPI.utils.createView({
-        name: 'image-preview-overlay',
-        tag: 'div',
-        ignoreRect: true,
-        create: ({ root, props }) => {
+export const createImageOverlayView = (fpAPI) =>
+  fpAPI.utils.createView({
+    name: "image-preview-overlay",
+    tag: "div",
+    ignoreRect: true,
+    create: ({ root, props }) => {
+      if (document.querySelector("base")) {
+        const url = window.location.href.replace(window.location.hash, "");
+        SVG_MASK = SVG_MASK.replace(/url\(\#/g, "url(" + url + "#");
+      }
 
-            if (!checkedMyBases && document.querySelector('base')) {
-                SVG_MASK = SVG_MASK.replace(/url\(\#/g, 'url(' + window.location.href.replace(window.location.hash, '') + '#')
-                checkedMyBases = true;
-            }
-
-            SVGMaskUniqueId++;
-            root.element.classList.add(`filepond--image-preview-overlay-${ props.status }`);
-            root.element.innerHTML = SVG_MASK.replace(/__UID__/g, SVGMaskUniqueId);
-        },
-        mixins: {
-            styles: ['opacity'],
-            animations: {
-                opacity: { type: 'spring', mass: 25 }
-            }
-        }
-    });
+      SVGMaskUniqueId++;
+      root.element.classList.add(
+        `filepond--image-preview-overlay-${props.status}`
+      );
+      root.element.innerHTML = SVG_MASK.replace(/__UID__/g, SVGMaskUniqueId);
+    },
+    mixins: {
+      styles: ["opacity"],
+      animations: {
+        opacity: { type: "spring", mass: 25 },
+      },
+    },
+  });

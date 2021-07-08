@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.6
+ * FilePondPluginImagePreview 4.6.7
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -2707,7 +2707,6 @@
   var SVG_MASK =
     '<svg width="500" height="200" viewBox="0 0 500 200" preserveAspectRatio="none">\n    <defs>\n        <radialGradient id="gradient-__UID__" cx=".5" cy="1.25" r="1.15">\n            <stop offset=\'50%\' stop-color=\'#000000\'/>\n            <stop offset=\'56%\' stop-color=\'#0a0a0a\'/>\n            <stop offset=\'63%\' stop-color=\'#262626\'/>\n            <stop offset=\'69%\' stop-color=\'#4f4f4f\'/>\n            <stop offset=\'75%\' stop-color=\'#808080\'/>\n            <stop offset=\'81%\' stop-color=\'#b1b1b1\'/>\n            <stop offset=\'88%\' stop-color=\'#dadada\'/>\n            <stop offset=\'94%\' stop-color=\'#f6f6f6\'/>\n            <stop offset=\'100%\' stop-color=\'#ffffff\'/>\n        </radialGradient>\n        <mask id="mask-__UID__">\n            <rect x="0" y="0" width="500" height="200" fill="url(#gradient-__UID__)"></rect>\n        </mask>\n    </defs>\n    <rect x="0" width="500" height="200" fill="currentColor" mask="url(#mask-__UID__)"></rect>\n</svg>';
 
-  var checkedMyBases = false;
   var SVGMaskUniqueId = 0;
 
   var createImageOverlayView = function createImageOverlayView(fpAPI) {
@@ -2718,21 +2717,16 @@
       create: function create(_ref) {
         var root = _ref.root,
           props = _ref.props;
-
-        if (!checkedMyBases && document.querySelector('base')) {
-          SVG_MASK = SVG_MASK.replace(
-            /url\(\#/g,
-            'url(' +
-              window.location.href.replace(window.location.hash, '') +
-              '#'
-          );
-          checkedMyBases = true;
+        if (document.querySelector('base')) {
+          var url = window.location.href.replace(window.location.hash, '');
+          SVG_MASK = SVG_MASK.replace(/url\(\#/g, 'url(' + url + '#');
         }
 
         SVGMaskUniqueId++;
         root.element.classList.add(
           'filepond--image-preview-overlay-'.concat(props.status)
         );
+
         root.element.innerHTML = SVG_MASK.replace(/__UID__/g, SVGMaskUniqueId);
       },
       mixins: {
