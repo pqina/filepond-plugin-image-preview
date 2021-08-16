@@ -2717,9 +2717,10 @@
       create: function create(_ref) {
         var root = _ref.root,
           props = _ref.props;
+        var mask = SVG_MASK;
         if (document.querySelector('base')) {
           var url = window.location.href.replace(window.location.hash, '');
-          SVG_MASK = SVG_MASK.replace(/url\(\#/g, 'url(' + url + '#');
+          mask = mask.replace(/url\(\#/g, 'url(' + url + '#');
         }
 
         SVGMaskUniqueId++;
@@ -2727,7 +2728,7 @@
           'filepond--image-preview-overlay-'.concat(props.status)
         );
 
-        root.element.innerHTML = SVG_MASK.replace(/__UID__/g, SVGMaskUniqueId);
+        root.element.innerHTML = mask.replace(/__UID__/g, SVGMaskUniqueId);
       },
       mixins: {
         styles: ['opacity'],

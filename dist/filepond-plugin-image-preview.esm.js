@@ -963,16 +963,17 @@ const createImageOverlayView = fpAPI =>
     tag: 'div',
     ignoreRect: true,
     create: ({ root, props }) => {
+      let mask = SVG_MASK;
       if (document.querySelector('base')) {
         const url = window.location.href.replace(window.location.hash, '');
-        SVG_MASK = SVG_MASK.replace(/url\(\#/g, 'url(' + url + '#');
+        mask = mask.replace(/url\(\#/g, 'url(' + url + '#');
       }
 
       SVGMaskUniqueId++;
       root.element.classList.add(
         `filepond--image-preview-overlay-${props.status}`
       );
-      root.element.innerHTML = SVG_MASK.replace(/__UID__/g, SVGMaskUniqueId);
+      root.element.innerHTML = mask.replace(/__UID__/g, SVGMaskUniqueId);
     },
     mixins: {
       styles: ['opacity'],
