@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.8
+ * FilePondPluginImagePreview 4.6.9
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -3054,7 +3054,6 @@
       var root = _ref2.root,
         props = _ref2.props,
         image = _ref2.image;
-
       var id = props.id;
       var item = root.query('GET_ITEM', { id: id });
       if (!item) return;
@@ -3131,6 +3130,7 @@
       imageView.background = root.query(
         'GET_IMAGE_TRANSFORM_CANVAS_BACKGROUND_COLOR'
       );
+
       if (root.query('GET_IMAGE_PREVIEW_MARKUP_SHOW')) {
         imageView.dirty = true;
         imageView.resize = item.getMetadata('resize');
@@ -3143,7 +3143,6 @@
       var root = _ref4.root,
         props = _ref4.props,
         action = _ref4.action;
-
       // only filter and crop trigger redraw
       if (!/crop|filter|markup|resize/.test(action.change.key)) return;
 
@@ -3166,7 +3165,13 @@
         var image = root.ref.images[root.ref.images.length - 1];
 
         // if aspect ratio has changed, we need to create a new image
-        if (Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001) {
+        if (
+          crop &&
+          crop.aspectRatio &&
+          image.crop &&
+          image.crop.aspectRatio &&
+          Math.abs(crop.aspectRatio - image.crop.aspectRatio) > 0.00001
+        ) {
           var _imageView = shiftImage({ root: root });
           pushImage({
             root: root,
@@ -3399,7 +3404,6 @@
      */
     var create = function create(_ref12) {
       var root = _ref12.root;
-
       // image view
       root.ref.images = [];
 
@@ -3436,9 +3440,7 @@
       name: 'image-preview-wrapper',
       create: create,
       styles: ['height'],
-
       apis: ['height'],
-
       destroy: function destroy(_ref13) {
         var root = _ref13.root;
         // we resize the image so memory on iOS 12 is released more quickly (it seems)
@@ -3469,9 +3471,9 @@
           DID_START_ITEM_PROCESSING: restoreOverlay,
           DID_REVERT_ITEM_PROCESSING: restoreOverlay
         },
+
         function(_ref15) {
           var root = _ref15.root;
-
           // views on death row
           var viewsToRemove = root.ref.imageViewBin.filter(function(imageView) {
             return imageView.opacity === 0;
