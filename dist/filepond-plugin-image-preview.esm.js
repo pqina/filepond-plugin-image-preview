@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.9
+ * FilePondPluginImagePreview 4.6.10
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -1847,10 +1847,15 @@ const plugin = fpAPI => {
           if (root.ref.shouldDrawPreview) {
             // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
             requestAnimationFrame(() => {
-              root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', {
-                id: props.id
+              // this requestAnimationFrame nesting is horrible but it fixes an issue with 100hz displays on Chrome
+              // https://github.com/pqina/filepond-plugin-image-preview/issues/57
+              requestAnimationFrame(() => {
+                root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', {
+                  id: props.id
+                });
               });
             });
+
             root.ref.shouldDrawPreview = false;
           }
         }

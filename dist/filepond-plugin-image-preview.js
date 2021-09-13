@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.9
+ * FilePondPluginImagePreview 4.6.10
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -3624,6 +3624,7 @@
           minPreviewHeight,
           Math.min(imageHeight, maxPreviewHeight)
         );
+
         var itemWidth = root.rect.element.width;
         var previewHeight = Math.min(
           itemWidth * previewAspectRatio,
@@ -3646,7 +3647,6 @@
       var didUpdateItemMetadata = function didUpdateItemMetadata(_ref4) {
         var root = _ref4.root,
           action = _ref4.action;
-
         if (action.change.key !== 'crop') return;
 
         // actions in next write operation
@@ -3656,7 +3656,6 @@
       var didCalculatePreviewSize = function didCalculatePreviewSize(_ref5) {
         var root = _ref5.root,
           action = _ref5.action;
-
         // remember dimensions
         root.ref.imageWidth = action.width;
         root.ref.imageHeight = action.height;
@@ -3679,10 +3678,10 @@
             DID_IMAGE_PREVIEW_CALCULATE_SIZE: didCalculatePreviewSize,
             DID_UPDATE_ITEM_METADATA: didUpdateItemMetadata
           },
+
           function(_ref6) {
             var root = _ref6.root,
               props = _ref6.props;
-
             // no preview view attached
             if (!root.ref.imagePreview) return;
 
@@ -3698,10 +3697,15 @@
             if (root.ref.shouldDrawPreview) {
               // queue till next frame so we're sure the height has been applied this forces the draw image call inside the wrapper view to use the correct height
               requestAnimationFrame(function() {
-                root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', {
-                  id: props.id
+                // this requestAnimationFrame nesting is horrible but it fixes an issue with 100hz displays on Chrome
+                // https://github.com/pqina/filepond-plugin-image-preview/issues/57
+                requestAnimationFrame(function() {
+                  root.dispatch('DID_FINISH_CALCULATE_PREVIEWSIZE', {
+                    id: props.id
+                  });
                 });
               });
+
               root.ref.shouldDrawPreview = false;
             }
           }
