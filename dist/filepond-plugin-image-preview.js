@@ -1,5 +1,5 @@
 /*!
- * FilePondPluginImagePreview 4.6.10
+ * FilePondPluginImagePreview 4.6.11
  * Licensed under MIT, https://opensource.org/licenses/MIT/
  * Please visit https://pqina.nl/filepond/ for details.
  */
@@ -2719,7 +2719,9 @@
           props = _ref.props;
         var mask = SVG_MASK;
         if (document.querySelector('base')) {
-          var url = window.location.href.replace(window.location.hash, '');
+          var url = new URL(
+            window.location.href.replace(window.location.hash, '')
+          ).href;
           mask = mask.replace(/url\(\#/g, 'url(' + url + '#');
         }
 

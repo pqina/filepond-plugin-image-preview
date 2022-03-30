@@ -28,7 +28,9 @@ export const createImageOverlayView = (fpAPI) =>
     create: ({ root, props }) => {
       let mask = SVG_MASK;
       if (document.querySelector("base")) {
-        const url = window.location.href.replace(window.location.hash, "");
+        const url = new URL(
+          window.location.href.replace(window.location.hash, "")
+        ).href;
         mask = mask.replace(/url\(\#/g, "url(" + url + "#");
       }
 
