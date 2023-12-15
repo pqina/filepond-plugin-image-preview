@@ -209,7 +209,7 @@ export const createImageWrapperView = (_) => {
     const userAgent = window.navigator.userAgent;
     const isFirefox = userAgent.match(/Firefox\/([0-9]+)\./);
     const firefoxVersion = isFirefox ? parseInt(isFirefox[1]) : null;
-    if (firefoxVersion <= 58) return false;
+    if (firefoxVersion !== null && firefoxVersion <= 58) return false;
 
     return "createImageBitmap" in window && isBitmap(file);
   };
